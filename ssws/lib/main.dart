@@ -8,6 +8,8 @@ import 'pages/signup_page.dart';
 import 'pages/ai_chat_page.dart';
 import 'pages/recommendations_page.dart';
 import 'pages/map_view_page.dart';
+import 'pages/settings_page.dart';
+import 'pages/alerts_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +40,8 @@ class MyApp extends StatelessWidget {
         '/chat': (context) => const AiChatPage(),
         '/recommendations': (context) => const RecommendationsPage(),
         '/map': (context) => const MapViewPage(),
+        '/settings': (context) => const SettingsPage(),
+        '/alerts': (context) => const AlertsPage(),
       },
       home: const LandingScreen(),
       // home: const LandingScreen(),

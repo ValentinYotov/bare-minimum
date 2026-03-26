@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/info_card.dart';
-import '../widgets/action_button_card.dart';
 
-class MapViewPage extends StatefulWidget {
-  const MapViewPage({super.key});
-
-  @override
-  State<MapViewPage> createState() => _MapViewPageState();
-}
+// ── Zone model ────────────────────────────────────────────────────────────────
 
 class FieldZone {
+  final String id;
   final String name;
-  final String description;
-  final Rect rect;
+  final Rect rect; // fractional coords 0.0–1.0 relative to canvas
   final Color borderColor;
   final Color fillColor;
   final bool hasSensor;
@@ -26,8 +20,8 @@ class FieldZone {
   final Color sensorColor;
 
   const FieldZone({
+    required this.id,
     required this.name,
-    required this.description,
     required this.rect,
     required this.borderColor,
     required this.fillColor,
@@ -43,7 +37,6 @@ class FieldZone {
 
   FieldZone copyWith({
     String? name,
-    String? description,
     Rect? rect,
     Color? borderColor,
     Color? fillColor,
@@ -57,8 +50,8 @@ class FieldZone {
     Color? sensorColor,
   }) {
     return FieldZone(
+      id: id,
       name: name ?? this.name,
-      description: description ?? this.description,
       rect: rect ?? this.rect,
       borderColor: borderColor ?? this.borderColor,
       fillColor: fillColor ?? this.fillColor,
@@ -74,21 +67,69 @@ class FieldZone {
   }
 }
 
+// Preset color pairs for zone color picker
+const _kColorPresets = [
+  (border: Color(0xFF22C55E), fill: Color(0xFFBBF7D0)),
+  (border: Color(0xFF3B82F6), fill: Color(0xFFBFDBFE)),
+  (border: Color(0xFFA855F7), fill: Color(0xFFE9D5FF)),
+  (border: Color(0xFFF97316), fill: Color(0xFFFFDDB8)),
+  (border: Color(0xFFEC4899), fill: Color(0xFFFCE7F3)),
+  (border: Color(0xFF14B8A6), fill: Color(0xFFCCFBF1)),
+];
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+class MapViewPage extends StatefulWidget {
+  const MapViewPage({super.key});
+
+  @override
+  State<MapViewPage> createState() => _MapViewPageState();
+}
+
 class _MapViewPageState extends State<MapViewPage> {
-  late List<FieldZone> zones;
-  int selectedZoneIndex = 0;
+  // Static so state survives navigation away and back
+  static List<FieldZone>? _savedZones;
+  static int _savedSelectedIndex = 0;
+  static int _savedNextId = 4;
+
+  bool _editMode = false;
+  late int _selectedIndex;
+  Size? _canvasSize;
+  late int _nextId;
+
+  late List<FieldZone> _zones;
+
+  // Persist immediately so navigation style doesn't matter
+  void _persistState() {
+    _savedZones = List.from(_zones);
+    _savedSelectedIndex = _selectedIndex;
+    _savedNextId = _nextId;
+  }
+
+  @override
+  void dispose() {
+    _persistState();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
+    _selectedIndex = _savedSelectedIndex;
+    _nextId = _savedNextId;
 
-    zones = [
-      FieldZone(
+    if (_savedZones != null) {
+      _zones = List.from(_savedZones!);
+      return;
+    }
+
+    _zones = [
+      const FieldZone(
+        id: '1',
         name: 'Zone A',
-        description: 'Top-left field area',
-        rect: const Rect.fromLTWH(0.06, 0.10, 0.40, 0.33),
-        borderColor: const Color(0xFF5AC56A),
-        fillColor: const Color(0xFFAEE8B8),
+        rect: Rect.fromLTWH(0.04, 0.06, 0.42, 0.38),
+        borderColor: Color(0xFF22C55E),
+        fillColor: Color(0xFFBBF7D0),
         hasSensor: true,
         sensorName: 'Soil Sensor A1',
         sensorType: 'Soil Moisture',
@@ -96,14 +137,248 @@ class _MapViewPageState extends State<MapViewPage> {
         currentValue: '68%',
         lastUpdate: '2 min ago',
         sensorIcon: Icons.water_drop_outlined,
-        sensorColor: const Color(0xFF3B82F6),
+        sensorColor: Color(0xFF3B82F6),
       ),
-      FieldZone(
+      const FieldZone(
+        id: '2',
         name: 'Zone B',
-        description: 'Top-right field area',
-        rect: const Rect.fromLTWH(0.50, 0.10, 0.40, 0.33),
-        borderColor: const Color(0xFF60A5FA),
-        fillColor: const Color(0xFFAECFE0),
+        rect: Rect.fromLTWH(0.52, 0.06, 0.42, 0.38),
+        borderColor: Color(0xFF3B82F6),
+        fillColor: Color(0xFFBFDBFE),
+        hasSensor: false,
+        sensorName: 'No sensor assigned',
+        sensorType: 'Not set',
+        status: 'Inactive',
+        currentValue: '--',
+        lastUpdate: 'No data',
+        sensorIcon: Icons.sensors_off_outlined,
+        sensorColor: Color(0xFFB8C0CC),
+      ),
+      const FieldZone(
+        id: '3',
+        name: 'Zone C',
+        rect: Rect.fromLTWH(0.04, 0.54, 0.90, 0.34),
+        borderColor: Color(0xFFA855F7),
+        fillColor: Color(0xFFE9D5FF),
+        hasSensor: true,
+        sensorName: 'Fire Sensor C1',
+        sensorType: 'Fire Detector',
+        status: 'Active',
+        currentValue: 'Normal',
+        lastUpdate: '1 min ago',
+        sensorIcon: Icons.local_fire_department_outlined,
+        sensorColor: Color(0xFF10B981),
+      ),
+    ];
+  }
+
+  // ── Gesture handlers ──────────────────────────────────────────────────────
+
+  void _onZoneDrag(int index, DragUpdateDetails d) {
+    if (_canvasSize == null) return;
+    final z = _zones[index];
+    final dx = d.delta.dx / _canvasSize!.width;
+    final dy = d.delta.dy / _canvasSize!.height;
+    final newLeft = (z.rect.left + dx).clamp(0.0, 1.0 - z.rect.width);
+    final newTop = (z.rect.top + dy).clamp(0.0, 1.0 - z.rect.height);
+    setState(() {
+      _zones[index] = z.copyWith(
+        rect: Rect.fromLTWH(newLeft, newTop, z.rect.width, z.rect.height),
+      );
+    });
+    _persistState();
+  }
+
+  void _onResizeTL(int index, DragUpdateDetails d) {
+    if (_canvasSize == null) return;
+    final z = _zones[index];
+    final dx = d.delta.dx / _canvasSize!.width;
+    final dy = d.delta.dy / _canvasSize!.height;
+    final newLeft = (z.rect.left + dx).clamp(0.0, z.rect.right - 0.12);
+    final newTop = (z.rect.top + dy).clamp(0.0, z.rect.bottom - 0.12);
+    setState(() {
+      _zones[index] = z.copyWith(
+        rect: Rect.fromLTRB(newLeft, newTop, z.rect.right, z.rect.bottom),
+      );
+    });
+    _persistState();
+  }
+
+  void _onResizeTR(int index, DragUpdateDetails d) {
+    if (_canvasSize == null) return;
+    final z = _zones[index];
+    final dx = d.delta.dx / _canvasSize!.width;
+    final dy = d.delta.dy / _canvasSize!.height;
+    final newRight = (z.rect.right + dx).clamp(z.rect.left + 0.12, 1.0);
+    final newTop = (z.rect.top + dy).clamp(0.0, z.rect.bottom - 0.12);
+    setState(() {
+      _zones[index] = z.copyWith(
+        rect: Rect.fromLTRB(z.rect.left, newTop, newRight, z.rect.bottom),
+      );
+    });
+    _persistState();
+  }
+
+  void _onResizeBL(int index, DragUpdateDetails d) {
+    if (_canvasSize == null) return;
+    final z = _zones[index];
+    final dx = d.delta.dx / _canvasSize!.width;
+    final dy = d.delta.dy / _canvasSize!.height;
+    final newLeft = (z.rect.left + dx).clamp(0.0, z.rect.right - 0.12);
+    final newBottom = (z.rect.bottom + dy).clamp(z.rect.top + 0.12, 1.0);
+    setState(() {
+      _zones[index] = z.copyWith(
+        rect: Rect.fromLTRB(newLeft, z.rect.top, z.rect.right, newBottom),
+      );
+    });
+    _persistState();
+  }
+
+  void _onResizeBR(int index, DragUpdateDetails d) {
+    if (_canvasSize == null) return;
+    final z = _zones[index];
+    final dx = d.delta.dx / _canvasSize!.width;
+    final dy = d.delta.dy / _canvasSize!.height;
+    final newRight = (z.rect.right + dx).clamp(z.rect.left + 0.12, 1.0);
+    final newBottom = (z.rect.bottom + dy).clamp(z.rect.top + 0.12, 1.0);
+    setState(() {
+      _zones[index] = z.copyWith(
+        rect: Rect.fromLTRB(z.rect.left, z.rect.top, newRight, newBottom),
+      );
+    });
+    _persistState();
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  void _renameZone(int index) async {
+    final ctrl = TextEditingController(text: _zones[index].name);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Rename Zone', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Zone name',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF22C55E), width: 1.5),
+            ),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result != null && result.isNotEmpty) {
+      setState(() => _zones[index] = _zones[index].copyWith(name: result));
+      _persistState();
+    }
+  }
+
+  void _changeColor(int index) async {
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Zone colour', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: List.generate(_kColorPresets.length, (ci) {
+                final preset = _kColorPresets[ci];
+                final isSelected = _zones[index].borderColor == preset.border;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _zones[index] = _zones[index].copyWith(
+                        borderColor: preset.border,
+                        fillColor: preset.fill,
+                      );
+                    });
+                    _persistState();
+                    Navigator.pop(ctx);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: preset.fill,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? preset.border : Colors.transparent,
+                        width: 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: preset.border.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: isSelected
+                        ? Icon(Icons.check_rounded, color: preset.border, size: 22)
+                        : null,
+                  ),
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _deleteZone(int index) {
+    if (_zones.length <= 1) return;
+    setState(() {
+      _zones.removeAt(index);
+      _selectedIndex = (_selectedIndex >= _zones.length)
+          ? _zones.length - 1
+          : _selectedIndex;
+    });
+    _persistState();
+  }
+
+  void _addZone() {
+    final id = '${_nextId++}';
+    final offset = (_zones.length % _kColorPresets.length);
+    final preset = _kColorPresets[offset];
+    setState(() {
+      _zones.add(FieldZone(
+        id: id,
+        name: 'Zone ${String.fromCharCode(64 + _zones.length + 1)}',
+        rect: Rect.fromLTWH(0.08 + (_zones.length * 0.04), 0.08 + (_zones.length * 0.04), 0.36, 0.28),
+        borderColor: preset.border,
+        fillColor: preset.fill,
         hasSensor: false,
         sensorName: 'No sensor assigned',
         sensorType: 'Not set',
@@ -112,65 +387,16 @@ class _MapViewPageState extends State<MapViewPage> {
         lastUpdate: 'No data',
         sensorIcon: Icons.sensors_off_outlined,
         sensorColor: const Color(0xFFB8C0CC),
-      ),
-      FieldZone(
-        name: 'Zone C',
-        description: 'Bottom field area',
-        rect: const Rect.fromLTWH(0.06, 0.50, 0.84, 0.30),
-        borderColor: const Color(0xFFB48AE8),
-        fillColor: const Color(0xFFB8CED3),
-        hasSensor: true,
-        sensorName: 'Fire Sensor C1',
-        sensorType: 'Fire Detector',
-        status: 'Active',
-        currentValue: 'Normal',
-        lastUpdate: '1 min ago',
-        sensorIcon: Icons.local_fire_department_outlined,
-        sensorColor: const Color(0xFF08C24E),
-      ),
-    ];
-  }
-
-  void _addZone() {
-    if (zones.length >= 5) return;
-
-    final nextIndex = zones.length;
-    final letter = String.fromCharCode(65 + nextIndex);
-
-    setState(() {
-      zones.add(
-        FieldZone(
-          name: 'Zone $letter',
-          description: 'New split area',
-          rect: Rect.fromLTWH(
-            0.12 + (nextIndex * 0.06),
-            0.16 + (nextIndex * 0.06),
-            0.34,
-            0.24,
-          ),
-          borderColor: const Color(0xFF8B5CF6),
-          fillColor: const Color(0xFFD8CFF3),
-          hasSensor: false,
-          sensorName: 'No sensor assigned',
-          sensorType: 'Not set',
-          status: 'Inactive',
-          currentValue: '--',
-          lastUpdate: 'No data',
-          sensorIcon: Icons.sensors_off_outlined,
-          sensorColor: const Color(0xFFB8C0CC),
-        ),
-      );
-      selectedZoneIndex = zones.length - 1;
+      ));
+      _selectedIndex = _zones.length - 1;
     });
+    _persistState();
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final selectedZone = zones[selectedZoneIndex];
-    final now = TimeOfDay.now();
-    final hourLabel =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
     return Scaffold(
       drawer: const AppDrawer(selectedPage: 'map'),
       appBar: AppBar(
@@ -179,89 +405,151 @@ class _MapViewPageState extends State<MapViewPage> {
         surfaceTintColor: Colors.transparent,
         title: const Text(
           'Field Map View',
-          style: TextStyle(
-            color: Color(0xFF111827),
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-          ),
+          style: TextStyle(color: Color(0xFF111827), fontWeight: FontWeight.w700, fontSize: 20),
         ),
         iconTheme: const IconThemeData(color: Color(0xFF111827)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _editMode
+                  ? FilledButton.icon(
+                      key: const ValueKey('done'),
+                      onPressed: () => setState(() => _editMode = false),
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                      label: const Text('Done'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF16A34A),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                    )
+                  : OutlinedButton.icon(
+                      key: const ValueKey('edit'),
+                      onPressed: () => setState(() => _editMode = true),
+                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      label: const Text('Edit'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF374151),
+                        side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Real-time sensor locations and field zones',
-              style: TextStyle(fontSize: 15, color: Color(0xFF64748B)),
+            // Edit mode hint banner
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              child: _editMode
+                  ? Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF9C4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFBBF24)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFB45309)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Drag zones to move • Corner handles to resize • Tap name to rename',
+                              style: TextStyle(fontSize: 12, color: Colors.brown[700], height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
-            const SizedBox(height: 18),
 
-            _WeatherCard(currentHour: hourLabel),
-
-            const SizedBox(height: 22),
-
+            // Canvas
             InfoCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Field Layout',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  Container(
-                    height: 220,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFC8EFD0),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        return Stack(
-                          children: [
-                            for (int i = 0; i < zones.length; i++)
-                              _buildZone(
-                                zone: zones[i],
-                                isSelected: i == selectedZoneIndex,
-                                parentWidth: constraints.maxWidth,
-                                parentHeight: constraints.maxHeight,
-                                onTap: () {
-                                  setState(() {
-                                    selectedZoneIndex = i;
-                                  });
-                                },
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  const Wrap(
-                    spacing: 18,
-                    runSpacing: 10,
+                  Row(
                     children: [
-                      _LegendItem(
-                        color: Color(0xFF3B82F6),
-                        label: 'Soil Moisture',
+                      const Text(
+                        'Field Layout',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                       ),
-                      _LegendItem(
-                        color: Color(0xFF08C24E),
-                        label: 'Fire Detector',
-                      ),
-                      _LegendItem(color: Color(0xFFB8C0CC), label: 'No Sensor'),
+                      const Spacer(),
+                      if (_editMode)
+                        TextButton.icon(
+                          onPressed: _addZone,
+                          icon: const Icon(Icons.add_rounded, size: 16),
+                          label: const Text('Add Zone'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF16A34A),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          ),
+                        ),
                     ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // The actual canvas
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      height: 320,
+                      width: double.infinity,
+                      color: const Color(0xFFD1FAE5),
+                      child: LayoutBuilder(
+                        builder: (ctx, constraints) {
+                          _canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
+                          return Stack(
+                            clipBehavior: Clip.hardEdge,
+                            children: [
+                              // Grid dots for visual reference
+                              CustomPaint(
+                                size: Size(constraints.maxWidth, constraints.maxHeight),
+                                painter: _GridPainter(),
+                              ),
+                              for (int i = 0; i < _zones.length; i++)
+                                _ZoneTile(
+                                  zone: _zones[i],
+                                  isSelected: i == _selectedIndex,
+                                  editMode: _editMode,
+                                  canvasSize: _canvasSize!,
+                                  onTap: () => setState(() => _selectedIndex = i),
+                                  onDrag: (d) => _onZoneDrag(i, d),
+                                  onResizeTL: (d) => _onResizeTL(i, d),
+                                  onResizeTR: (d) => _onResizeTR(i, d),
+                                  onResizeBL: (d) => _onResizeBL(i, d),
+                                  onResizeBR: (d) => _onResizeBR(i, d),
+                                  onRename: () => _renameZone(i),
+                                  onDelete: () => _deleteZone(i),
+                                  onChangeColor: () => _changeColor(i),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Legend
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 8,
+                    children: _zones.map((z) => _LegendItem(color: z.borderColor, label: z.name)).toList(),
                   ),
                 ],
               ),
@@ -269,211 +557,555 @@ class _MapViewPageState extends State<MapViewPage> {
 
             const SizedBox(height: 16),
 
-            ActionButtonCard(
-              text: 'Add / Split Zone',
-              textColor: const Color(0xFF08C24E),
-              borderColor: const Color(0xFF08C24E),
-              onTap: _addZone,
-            ),
-
-            const SizedBox(height: 20),
-
-            _SensorDetailsCard(zone: selectedZone),
+            // Zone details / edit panel
+            _editMode
+                ? _ZoneEditPanel(
+                    zone: _zones[_selectedIndex],
+                    onRename: () => _renameZone(_selectedIndex),
+                    onChangeColor: () => _changeColor(_selectedIndex),
+                    onDelete: _zones.length > 1 ? () => _deleteZone(_selectedIndex) : null,
+                  )
+                : _SensorDetailsCard(zone: _zones[_selectedIndex]),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildZone({
-    required FieldZone zone,
-    required bool isSelected,
-    required double parentWidth,
-    required double parentHeight,
-    required VoidCallback onTap,
-  }) {
-    final left = zone.rect.left * parentWidth;
-    final top = zone.rect.top * parentHeight;
-    final width = zone.rect.width * parentWidth;
-    final height = zone.rect.height * parentHeight;
+// ── Zone tile ─────────────────────────────────────────────────────────────────
+
+class _ZoneTile extends StatelessWidget {
+  final FieldZone zone;
+  final bool isSelected;
+  final bool editMode;
+  final Size canvasSize;
+  final VoidCallback onTap;
+  final void Function(DragUpdateDetails) onDrag;
+  final void Function(DragUpdateDetails) onResizeTL;
+  final void Function(DragUpdateDetails) onResizeTR;
+  final void Function(DragUpdateDetails) onResizeBL;
+  final void Function(DragUpdateDetails) onResizeBR;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
+  final VoidCallback onChangeColor;
+
+  const _ZoneTile({
+    required this.zone,
+    required this.isSelected,
+    required this.editMode,
+    required this.canvasSize,
+    required this.onTap,
+    required this.onDrag,
+    required this.onResizeTL,
+    required this.onResizeTR,
+    required this.onResizeBL,
+    required this.onResizeBR,
+    required this.onRename,
+    required this.onDelete,
+    required this.onChangeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final left = zone.rect.left * canvasSize.width;
+    final top = zone.rect.top * canvasSize.height;
+    final width = zone.rect.width * canvasSize.width;
+    final height = zone.rect.height * canvasSize.height;
+    const handleSize = 22.0;
+    const handleVisual = 12.0;
 
     return Positioned(
       left: left,
       top: top,
       width: width,
       height: height,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: zone.fillColor,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF111827) : zone.borderColor,
-              width: isSelected ? 1.6 : 1,
-            ),
-            boxShadow:
-                isSelected
-                    ? const [
-                      BoxShadow(
-                        color: Color(0x16000000),
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Zone body — drag to move
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: onTap,
+              onPanUpdate: editMode ? onDrag : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                decoration: BoxDecoration(
+                  color: zone.fillColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected
+                        ? (editMode ? const Color(0xFFF59E0B) : const Color(0xFF111827))
+                        : zone.borderColor,
+                    width: isSelected ? 2 : 1.2,
+                  ),
+                  boxShadow: isSelected
+                      ? [BoxShadow(color: zone.borderColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]
+                      : null,
+                ),
+                child: Stack(
+                  children: [
+                    // Zone name label — tap to rename in edit mode
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: GestureDetector(
+                        onTap: editMode ? onRename : onTap,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(8),
+                            border: editMode
+                                ? Border.all(color: zone.borderColor.withOpacity(0.5), width: 1)
+                                : null,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                zone.name,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF111827),
+                                ),
+                              ),
+                              if (editMode) ...[
+                                const SizedBox(width: 4),
+                                Icon(Icons.edit_rounded, size: 10, color: zone.borderColor),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
-                    ]
-                    : null,
-          ),
-          child: Stack(
-            children: [
-              Align(
-                alignment: Alignment.topLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.92),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    zone.name,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
                     ),
-                  ),
+
+                    // Sensor dot
+                    if (!editMode)
+                      Center(child: _SensorDot(zone: zone)),
+
+                    // Edit mode: move cursor icon
+                    if (editMode)
+                      const Center(
+                        child: Icon(Icons.open_with_rounded, color: Colors.black26, size: 22),
+                      ),
+
+                    // Color picker button (edit mode)
+                    if (editMode)
+                      Positioned(
+                        bottom: 6,
+                        left: 8,
+                        child: GestureDetector(
+                          onTap: onChangeColor,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: zone.borderColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [BoxShadow(color: zone.borderColor.withOpacity(0.4), blurRadius: 6)],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              Align(alignment: Alignment.center, child: _SensorDot(zone: zone)),
-            ],
+            ),
           ),
-        ),
+
+          // ── Resize handles (edit mode only) ──
+          if (editMode) ...[
+            // Top-left
+            Positioned(
+              left: -handleSize / 2,
+              top: -handleSize / 2,
+              width: handleSize,
+              height: handleSize,
+              child: GestureDetector(
+                onPanUpdate: onResizeTL,
+                child: _HandleDot(color: zone.borderColor, size: handleVisual),
+              ),
+            ),
+            // Top-right
+            Positioned(
+              right: -handleSize / 2,
+              top: -handleSize / 2,
+              width: handleSize,
+              height: handleSize,
+              child: GestureDetector(
+                onPanUpdate: onResizeTR,
+                child: _HandleDot(color: zone.borderColor, size: handleVisual),
+              ),
+            ),
+            // Bottom-left
+            Positioned(
+              left: -handleSize / 2,
+              bottom: -handleSize / 2,
+              width: handleSize,
+              height: handleSize,
+              child: GestureDetector(
+                onPanUpdate: onResizeBL,
+                child: _HandleDot(color: zone.borderColor, size: handleVisual),
+              ),
+            ),
+            // Bottom-right
+            Positioned(
+              right: -handleSize / 2,
+              bottom: -handleSize / 2,
+              width: handleSize,
+              height: handleSize,
+              child: GestureDetector(
+                onPanUpdate: onResizeBR,
+                child: _HandleDot(color: zone.borderColor, size: handleVisual),
+              ),
+            ),
+
+            // Delete button (top-right corner, outside)
+            Positioned(
+              right: -14,
+              top: -14,
+              child: GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2))],
+                  ),
+                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 13),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 }
 
-class _WeatherCard extends StatelessWidget {
-  final String currentHour;
+class _HandleDot extends StatelessWidget {
+  final Color color;
+  final double size;
 
-  const _WeatherCard({required this.currentHour});
+  const _HandleDot({required this.color, required this.size});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return Center(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: color, width: 2),
+          boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 2))],
         ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x24000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Current Weather • $currentHour',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            '24°C',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 40,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Partly Cloudy',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 17,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 18),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _WeatherStat(
-                icon: Icons.thermostat_outlined,
-                label: 'Humidity',
-                value: '65%',
-              ),
-              _WeatherStat(icon: Icons.air, label: 'Wind', value: '12 km/h'),
-              _WeatherStat(
-                icon: Icons.water_drop_outlined,
-                label: 'Rain',
-                value: '0%',
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
 }
 
-class _WeatherStat extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
+// ── Grid painter ──────────────────────────────────────────────────────────────
 
-  const _WeatherStat({
-    required this.icon,
-    required this.label,
-    required this.value,
+class _GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0x1A065F46)
+      ..strokeWidth = 1;
+    const step = 32.0;
+    for (double x = step; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = step; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GridPainter _) => false;
+}
+
+// ── Zone edit panel ───────────────────────────────────────────────────────────
+
+class _ZoneEditPanel extends StatelessWidget {
+  final FieldZone zone;
+  final VoidCallback onRename;
+  final VoidCallback onChangeColor;
+  final VoidCallback? onDelete;
+
+  const _ZoneEditPanel({
+    required this.zone,
+    required this.onRename,
+    required this.onChangeColor,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(color: zone.borderColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Editing: ${zone.name}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _EditAction(
+            icon: Icons.drive_file_rename_outline_rounded,
+            label: 'Rename zone',
+            subtitle: zone.name,
+            onTap: onRename,
+          ),
+          const Divider(height: 24, color: Color(0xFFE5E7EB)),
+          _EditAction(
+            icon: Icons.palette_outlined,
+            label: 'Change colour',
+            subtitle: 'Tap to pick a new colour',
+            onTap: onChangeColor,
+            trailing: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: zone.fillColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: zone.borderColor, width: 2),
+              ),
+            ),
+          ),
+          if (onDelete != null) ...[
+            const Divider(height: 24, color: Color(0xFFE5E7EB)),
+            _EditAction(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete zone',
+              subtitle: 'This cannot be undone',
+              onTap: onDelete!,
+              destructive: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EditAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Widget? trailing;
+  final bool destructive;
+
+  const _EditAction({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+    this.trailing,
+    this.destructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? const Color(0xFFEF4444) : const Color(0xFF374151);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Row(
         children: [
-          Icon(icon, color: Colors.white, size: 19),
-          const SizedBox(width: 8),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: destructive ? const Color(0xFFFEE2E2) : const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
               ],
             ),
           ),
+          trailing ?? Icon(Icons.chevron_right_rounded, color: Colors.grey[300], size: 20),
         ],
+      ),
+    );
+  }
+}
+
+// ── Sensor details card (view mode) ──────────────────────────────────────────
+
+class _SensorDetailsCard extends StatelessWidget {
+  final FieldZone zone;
+
+  const _SensorDetailsCard({required this.zone});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = zone.hasSensor;
+    return InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: active ? zone.sensorColor : const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(zone.sensorIcon, color: active ? Colors.white : const Color(0xFF94A3B8), size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      active ? zone.sensorName : zone.name,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                    ),
+                    Text(
+                      zone.name,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: active ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  zone.status,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: active ? const Color(0xFF16A34A) : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(child: _StatBox(label: 'Current Value', value: zone.currentValue)),
+              const SizedBox(width: 10),
+              Expanded(child: _StatBox(label: 'Type', value: zone.sensorType)),
+              const SizedBox(width: 10),
+              Expanded(child: _StatBox(label: 'Last Update', value: zone.lastUpdate)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: active ? () {} : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: active ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                disabledBackgroundColor: const Color(0xFFE5E7EB),
+                foregroundColor: active ? Colors.white : const Color(0xFF94A3B8),
+                elevation: 0,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Text(
+                active ? 'View Sensor History' : 'No Sensor Assigned',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatBox extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatBox({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[400], fontWeight: FontWeight.w500)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared widgets ────────────────────────────────────────────────────────────
+
+class _SensorDot extends StatelessWidget {
+  final FieldZone zone;
+
+  const _SensorDot({required this.zone});
+
+  @override
+  Widget build(BuildContext context) {
+    final inactive = !zone.hasSensor;
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: inactive ? const Color(0xFFE5E7EB) : zone.sensorColor,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: inactive ? Colors.black12 : zone.sensorColor.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Icon(
+        zone.sensorIcon,
+        color: inactive ? const Color(0xFF94A3B8) : Colors.white,
+        size: 20,
       ),
     );
   }
@@ -491,207 +1123,12 @@ class _LegendItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 16,
-          height: 16,
+          width: 10,
+          height: 10,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 15, color: Color(0xFF374151)),
-        ),
-      ],
-    );
-  }
-}
-
-class _SensorDot extends StatelessWidget {
-  final FieldZone zone;
-
-  const _SensorDot({required this.zone});
-
-  @override
-  Widget build(BuildContext context) {
-    final isInactive = !zone.hasSensor;
-
-    return Container(
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        color: isInactive ? const Color(0xFFE5E7EB) : zone.sensorColor,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color:
-                (isInactive
-                    ? Colors.black12
-                    : zone.sensorColor.withOpacity(0.26)),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Icon(
-        zone.sensorIcon,
-        color: isInactive ? const Color(0xFF94A3B8) : Colors.white,
-        size: 22,
-      ),
-    );
-  }
-}
-
-class _SensorDetailsCard extends StatelessWidget {
-  final FieldZone zone;
-
-  const _SensorDetailsCard({required this.zone});
-
-  @override
-  Widget build(BuildContext context) {
-    final active = zone.hasSensor;
-
-    return InfoCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: active ? zone.sensorColor : const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  zone.sensorIcon,
-                  color: active ? Colors.white : const Color(0xFF94A3B8),
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      active ? zone.sensorName : zone.name,
-                      style: const TextStyle(
-                        fontSize: 27,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      zone.name,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-
-          _detailRow(
-            title: 'Status',
-            value: zone.status,
-            valueColor:
-                active ? const Color(0xFF08A63E) : const Color(0xFF94A3B8),
-            statusChip: true,
-          ),
-          _divider(),
-          _detailRow(title: 'Current Value', value: zone.currentValue),
-          _divider(),
-          _detailRow(title: 'Type', value: zone.sensorType),
-          _divider(),
-          _detailRow(title: 'Last Update', value: zone.lastUpdate),
-          const SizedBox(height: 20),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: active ? () {} : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    active ? const Color(0xFF08B33F) : const Color(0xFFE5E7EB),
-                disabledBackgroundColor: const Color(0xFFE5E7EB),
-                foregroundColor:
-                    active ? Colors.white : const Color(0xFF94A3B8),
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Text(
-                active ? 'View History' : 'No Sensor Added',
-                style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _divider() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 10),
-      child: Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
-    );
-  }
-
-  Widget _detailRow({
-    required String title,
-    required String value,
-    Color valueColor = const Color(0xFF111827),
-    bool statusChip = false,
-  }) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Color(0xFF475569),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        if (statusChip)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: valueColor.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: valueColor,
-              ),
-            ),
-          )
-        else
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: valueColor,
-            ),
-          ),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontSize: 13, color: Color(0xFF374151), fontWeight: FontWeight.w500)),
       ],
     );
   }

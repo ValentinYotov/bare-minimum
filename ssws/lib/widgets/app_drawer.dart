@@ -47,7 +47,7 @@ class AppDrawer extends StatelessWidget {
               selected: selectedPage == 'dashboard',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, '/home');
+                Navigator.pushReplacementNamed(context, '/home');
               },
             ),
             _DrawerItem(
@@ -56,7 +56,7 @@ class AppDrawer extends StatelessWidget {
               selected: selectedPage == 'chat',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, '/chat');
+                Navigator.pushReplacementNamed(context, '/chat');
               },
             ),
             _DrawerItem(
@@ -65,7 +65,7 @@ class AppDrawer extends StatelessWidget {
               selected: selectedPage == 'recommendations',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, '/recommendations');
+                Navigator.pushReplacementNamed(context, '/recommendations');
               },
             ),
             _DrawerItem(
@@ -74,20 +74,26 @@ class AppDrawer extends StatelessWidget {
               selected: selectedPage == 'map',
               onTap: () {
   Navigator.pop(context);
-  Navigator.pushNamed(context, '/map');
+  Navigator.pushReplacementNamed(context, '/map');
 },
             ),
             _DrawerItem(
               icon: Icons.error_outline,
               label: 'Alerts',
               selected: selectedPage == 'alerts',
-              onTap: () {},
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushReplacementNamed(context, '/alerts');
+              },
             ),
             _DrawerItem(
               icon: Icons.settings_outlined,
               label: 'Settings',
               selected: selectedPage == 'settings',
-              onTap: () {},
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushReplacementNamed(context, '/settings');
+              },
             ),
           ],
         ),

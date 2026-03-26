@@ -5,6 +5,27 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/info_card.dart';
 
+// ── Icon registry (constant instances for tree shaking) ──────────────────────
+
+const _kIconMap = <String, IconData>{
+  'water_drop': Icons.water_drop_outlined,
+  'fire': Icons.local_fire_department_outlined,
+  'sensors_off': Icons.sensors_off_outlined,
+  'thermostat': Icons.thermostat_outlined,
+  'air': Icons.air,
+  'grass': Icons.grass_outlined,
+  'science': Icons.science_outlined,
+};
+
+String _iconToKey(IconData icon) {
+  for (final e in _kIconMap.entries) {
+    if (e.value.codePoint == icon.codePoint) return e.key;
+  }
+  return 'sensors_off';
+}
+
+IconData _keyToIcon(String? key) => _kIconMap[key] ?? Icons.sensors_off_outlined;
+
 // ── Zone model ────────────────────────────────────────────────────────────────
 
 class FieldZone {
@@ -52,7 +73,7 @@ class FieldZone {
     'status': status,
     'currentValue': currentValue,
     'lastUpdate': lastUpdate,
-    'sensorIconCode': sensorIcon.codePoint,
+    'sensorIconKey': _iconToKey(sensorIcon),
     'sensorColor': sensorColor.value,
   };
 
@@ -74,7 +95,7 @@ class FieldZone {
       status: m['status'] as String? ?? 'Inactive',
       currentValue: m['currentValue'] as String? ?? '--',
       lastUpdate: m['lastUpdate'] as String? ?? 'No data',
-      sensorIcon: IconData(m['sensorIconCode'] as int? ?? Icons.sensors_off_outlined.codePoint, fontFamily: 'MaterialIcons'),
+      sensorIcon: _keyToIcon(m['sensorIconKey'] as String?),
       sensorColor: Color(m['sensorColor'] as int? ?? 0xFFB8C0CC),
     );
   }

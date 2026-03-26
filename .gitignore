@@ -1,1 +1,16 @@
 CLAUDE.md
+chroma/
+chroma.db
+*.sqlite3
+
+# ChromaDB persistent storage
+ai_services/recommendations/chroma_db/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Recommendation output
+ai_services/recommendations/recommendations_result.txt

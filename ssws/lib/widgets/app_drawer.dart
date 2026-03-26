@@ -63,13 +63,19 @@ class AppDrawer extends StatelessWidget {
               icon: Icons.lightbulb_outline,
               label: 'Recommendations',
               selected: selectedPage == 'recommendations',
-              onTap: () {},
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/recommendations');
+              },
             ),
             _DrawerItem(
               icon: Icons.map_outlined,
               label: 'Map View',
               selected: selectedPage == 'map',
-              onTap: () {},
+              onTap: () {
+  Navigator.pop(context);
+  Navigator.pushNamed(context, '/map');
+},
             ),
             _DrawerItem(
               icon: Icons.error_outline,

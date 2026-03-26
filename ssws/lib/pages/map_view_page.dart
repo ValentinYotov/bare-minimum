@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/info_card.dart';
 
@@ -34,6 +37,47 @@ class FieldZone {
     required this.sensorIcon,
     required this.sensorColor,
   });
+
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'left': rect.left,
+    'top': rect.top,
+    'width': rect.width,
+    'height': rect.height,
+    'borderColor': borderColor.value,
+    'fillColor': fillColor.value,
+    'hasSensor': hasSensor,
+    'sensorName': sensorName,
+    'sensorType': sensorType,
+    'status': status,
+    'currentValue': currentValue,
+    'lastUpdate': lastUpdate,
+    'sensorIconCode': sensorIcon.codePoint,
+    'sensorColor': sensorColor.value,
+  };
+
+  factory FieldZone.fromMap(String id, Map<String, dynamic> m) {
+    return FieldZone(
+      id: id,
+      name: m['name'] as String? ?? 'Zone',
+      rect: Rect.fromLTWH(
+        (m['left'] as num?)?.toDouble() ?? 0.1,
+        (m['top'] as num?)?.toDouble() ?? 0.1,
+        (m['width'] as num?)?.toDouble() ?? 0.3,
+        (m['height'] as num?)?.toDouble() ?? 0.25,
+      ),
+      borderColor: Color(m['borderColor'] as int? ?? 0xFF22C55E),
+      fillColor: Color(m['fillColor'] as int? ?? 0xFFBBF7D0),
+      hasSensor: m['hasSensor'] as bool? ?? false,
+      sensorName: m['sensorName'] as String? ?? 'No sensor assigned',
+      sensorType: m['sensorType'] as String? ?? 'Not set',
+      status: m['status'] as String? ?? 'Inactive',
+      currentValue: m['currentValue'] as String? ?? '--',
+      lastUpdate: m['lastUpdate'] as String? ?? 'No data',
+      sensorIcon: IconData(m['sensorIconCode'] as int? ?? Icons.sensors_off_outlined.codePoint, fontFamily: 'MaterialIcons'),
+      sensorColor: Color(m['sensorColor'] as int? ?? 0xFFB8C0CC),
+    );
+  }
 
   FieldZone copyWith({
     String? name,
@@ -87,89 +131,174 @@ class MapViewPage extends StatefulWidget {
 }
 
 class _MapViewPageState extends State<MapViewPage> {
-  // Static so state survives navigation away and back
+  // Static cache — tagged with UID so it invalidates on user switch
+  static String? _savedUid;
   static List<FieldZone>? _savedZones;
   static int _savedSelectedIndex = 0;
   static int _savedNextId = 4;
 
   bool _editMode = false;
+  bool _loading = true;
   late int _selectedIndex;
   Size? _canvasSize;
   late int _nextId;
-
   late List<FieldZone> _zones;
+  Timer? _debounce;
 
-  // Persist immediately so navigation style doesn't matter
-  void _persistState() {
-    _savedZones = List.from(_zones);
-    _savedSelectedIndex = _selectedIndex;
-    _savedNextId = _nextId;
-  }
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
 
-  @override
-  void dispose() {
-    _persistState();
-    super.dispose();
+  CollectionReference get _zonesCol {
+    return FirebaseFirestore.instance.collection('users').doc(_uid).collection('zones');
   }
 
   @override
   void initState() {
     super.initState();
-    _selectedIndex = _savedSelectedIndex;
-    _nextId = _savedNextId;
 
-    if (_savedZones != null) {
+    // Only use cache if it belongs to the current user
+    final cacheValid = _savedZones != null && _savedUid == _uid;
+
+    if (cacheValid) {
+      _selectedIndex = _savedSelectedIndex;
+      _nextId = _savedNextId;
       _zones = List.from(_savedZones!);
-      return;
+      _loading = false;
+    } else {
+      // Different user or first load — clear stale cache and load from Firestore
+      _savedZones = null;
+      _savedUid = null;
+      _selectedIndex = 0;
+      _nextId = 4;
+      _zones = [];
+      _loadZones();
     }
+  }
 
-    _zones = [
-      const FieldZone(
-        id: '1',
-        name: 'Zone A',
-        rect: Rect.fromLTWH(0.04, 0.06, 0.42, 0.38),
-        borderColor: Color(0xFF22C55E),
-        fillColor: Color(0xFFBBF7D0),
-        hasSensor: true,
-        sensorName: 'Soil Sensor A1',
-        sensorType: 'Soil Moisture',
-        status: 'Active',
-        currentValue: '68%',
-        lastUpdate: '2 min ago',
-        sensorIcon: Icons.water_drop_outlined,
-        sensorColor: Color(0xFF3B82F6),
-      ),
-      const FieldZone(
-        id: '2',
-        name: 'Zone B',
-        rect: Rect.fromLTWH(0.52, 0.06, 0.42, 0.38),
-        borderColor: Color(0xFF3B82F6),
-        fillColor: Color(0xFFBFDBFE),
-        hasSensor: false,
-        sensorName: 'No sensor assigned',
-        sensorType: 'Not set',
-        status: 'Inactive',
-        currentValue: '--',
-        lastUpdate: 'No data',
-        sensorIcon: Icons.sensors_off_outlined,
-        sensorColor: Color(0xFFB8C0CC),
-      ),
-      const FieldZone(
-        id: '3',
-        name: 'Zone C',
-        rect: Rect.fromLTWH(0.04, 0.54, 0.90, 0.34),
-        borderColor: Color(0xFFA855F7),
-        fillColor: Color(0xFFE9D5FF),
-        hasSensor: true,
-        sensorName: 'Fire Sensor C1',
-        sensorType: 'Fire Detector',
-        status: 'Active',
-        currentValue: 'Normal',
-        lastUpdate: '1 min ago',
-        sensorIcon: Icons.local_fire_department_outlined,
-        sensorColor: Color(0xFF10B981),
-      ),
-    ];
+  @override
+  void dispose() {
+    // Flush any pending debounced write
+    if (_debounce?.isActive == true) {
+      _debounce!.cancel();
+      _writeAllToFirestore();
+    }
+    _savedUid = _uid;
+    _savedZones = List.from(_zones);
+    _savedSelectedIndex = _selectedIndex;
+    _savedNextId = _nextId;
+    super.dispose();
+  }
+
+  // ── Firestore I/O ─────────────────────────────────────────────────────────
+
+  static const _defaultZones = <FieldZone>[
+    FieldZone(
+      id: '1',
+      name: 'Zone A',
+      rect: Rect.fromLTWH(0.04, 0.06, 0.42, 0.38),
+      borderColor: Color(0xFF22C55E),
+      fillColor: Color(0xFFBBF7D0),
+      hasSensor: true,
+      sensorName: 'Soil Sensor A1',
+      sensorType: 'Soil Moisture',
+      status: 'Active',
+      currentValue: '68%',
+      lastUpdate: '2 min ago',
+      sensorIcon: Icons.water_drop_outlined,
+      sensorColor: Color(0xFF3B82F6),
+    ),
+    FieldZone(
+      id: '2',
+      name: 'Zone B',
+      rect: Rect.fromLTWH(0.52, 0.06, 0.42, 0.38),
+      borderColor: Color(0xFF3B82F6),
+      fillColor: Color(0xFFBFDBFE),
+      hasSensor: false,
+      sensorName: 'No sensor assigned',
+      sensorType: 'Not set',
+      status: 'Inactive',
+      currentValue: '--',
+      lastUpdate: 'No data',
+      sensorIcon: Icons.sensors_off_outlined,
+      sensorColor: Color(0xFFB8C0CC),
+    ),
+    FieldZone(
+      id: '3',
+      name: 'Zone C',
+      rect: Rect.fromLTWH(0.04, 0.54, 0.90, 0.34),
+      borderColor: Color(0xFFA855F7),
+      fillColor: Color(0xFFE9D5FF),
+      hasSensor: true,
+      sensorName: 'Fire Sensor C1',
+      sensorType: 'Fire Detector',
+      status: 'Active',
+      currentValue: 'Normal',
+      lastUpdate: '1 min ago',
+      sensorIcon: Icons.local_fire_department_outlined,
+      sensorColor: Color(0xFF10B981),
+    ),
+  ];
+
+  Future<void> _loadZones() async {
+    try {
+      final snap = await _zonesCol.get();
+      if (snap.docs.isEmpty) {
+        // First time user — seed with defaults and write to Firestore
+        _zones = List.from(_defaultZones);
+        await _writeAllToFirestore();
+      } else {
+        _zones = snap.docs
+            .map((d) => FieldZone.fromMap(d.id, d.data() as Map<String, dynamic>))
+            .toList();
+        // Derive next ID from existing docs
+        int maxId = 3;
+        for (final z in _zones) {
+          final parsed = int.tryParse(z.id);
+          if (parsed != null && parsed > maxId) maxId = parsed;
+        }
+        _nextId = maxId + 1;
+      }
+    } catch (_) {
+      // Offline fallback — use defaults
+      if (_zones.isEmpty) _zones = List.from(_defaultZones);
+    }
+    if (mounted) {
+      setState(() => _loading = false);
+      _savedUid = _uid;
+      _savedZones = List.from(_zones);
+      _savedNextId = _nextId;
+    }
+  }
+
+  Future<void> _writeAllToFirestore() async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      // Remove docs no longer present
+      final existing = await _zonesCol.get();
+      final currentIds = _zones.map((z) => z.id).toSet();
+      for (final doc in existing.docs) {
+        if (!currentIds.contains(doc.id)) batch.delete(doc.reference);
+      }
+      // Upsert current zones
+      for (final z in _zones) {
+        batch.set(_zonesCol.doc(z.id), z.toMap());
+      }
+      await batch.commit();
+    } catch (_) {
+      // Silently fail — data is still in static cache
+    }
+  }
+
+  // Persist to static cache (tagged with UID) + debounced Firestore write
+  void _persistState() {
+    _savedUid = _uid;
+    _savedZones = List.from(_zones);
+    _savedSelectedIndex = _selectedIndex;
+    _savedNextId = _nextId;
+
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), () {
+      _writeAllToFirestore();
+    });
   }
 
   // ── Gesture handlers ──────────────────────────────────────────────────────
@@ -442,7 +571,9 @@ class _MapViewPageState extends State<MapViewPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF16A34A)))
+          : SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

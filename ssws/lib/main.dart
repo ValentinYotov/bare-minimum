@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'pages/home_page.dart';
+import 'pages/landing_page.dart';
+import 'pages/login_page.dart';
+import 'pages/signup_page.dart';
+import 'pages/ai_chat_page.dart';
+import 'pages/recommendations_page.dart';
+import 'pages/map_view_page.dart';
+import 'pages/settings_page.dart';
+import 'pages/alerts_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,11 +27,24 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text('Firebase connected 🚀'),
-        ),
+      title: 'SSWS',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF2F4F5),
       ),
+      routes: {
+        '/login': (context) => const LoginPage(),
+        '/signup': (context) => const SignUpPage(),
+        '/home': (context) => const HomePage(),
+        '/chat': (context) => const AiChatPage(),
+        '/recommendations': (context) => const RecommendationsPage(),
+        '/map': (context) => const MapViewPage(),
+        '/settings': (context) => const SettingsPage(),
+        '/alerts': (context) => const AlertsPage(),
+      },
+      home: const LandingScreen(),
+      // home: const LandingScreen(),
     );
   }
 }

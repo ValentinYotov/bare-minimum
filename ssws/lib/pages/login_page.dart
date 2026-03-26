@@ -1,7 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Please fill in all fields.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    } on FirebaseAuthException catch (e) {
+      _showError(_authErrorMessage(e.code));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
+  }
+
+  String _authErrorMessage(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'No account found for this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'invalid-email':
+        return 'Invalid email address.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'invalid-credential':
+        return 'Invalid email or password.';
+      default:
+        return 'Sign in failed. Please try again.';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,16 +144,19 @@ class LoginPage extends StatelessWidget {
 
                         const _FieldLabel('Email'),
                         const SizedBox(height: 8),
-                        const _InputField(
+                        _InputField(
+                          controller: _emailController,
                           hintText: 'Enter your email',
                           icon: Icons.mail_outline,
+                          keyboardType: TextInputType.emailAddress,
                         ),
 
                         const SizedBox(height: 18),
 
                         const _FieldLabel('Password'),
                         const SizedBox(height: 8),
-                        const _InputField(
+                        _InputField(
+                          controller: _passwordController,
                           hintText: 'Enter your password',
                           icon: Icons.lock_outline,
                           obscureText: true,
@@ -103,8 +172,7 @@ class LoginPage extends StatelessWidget {
                               foregroundColor: const Color(0xFF00A63E),
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(0, 0),
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             child: const Text(
                               'Forgot password?',
@@ -121,7 +189,7 @@ class LoginPage extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () {},
+                            onPressed: _isLoading ? null : _signIn,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF05B63D),
                               foregroundColor: Colors.white,
@@ -132,13 +200,22 @@ class LoginPage extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                             ),
-                            child: const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Sign In',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                         ),
 
@@ -218,20 +295,26 @@ class _FieldLabel extends StatelessWidget {
 }
 
 class _InputField extends StatelessWidget {
+  final TextEditingController controller;
   final String hintText;
   final IconData icon;
   final bool obscureText;
+  final TextInputType keyboardType;
 
   const _InputField({
+    required this.controller,
     required this.hintText,
     required this.icon,
     this.obscureText = false,
+    this.keyboardType = TextInputType.text,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       obscureText: obscureText,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(

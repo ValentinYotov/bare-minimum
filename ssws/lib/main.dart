@@ -28,6 +28,9 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignUpPage(),
+        '/home': (context) => const Scaffold(
+              body: Center(child: Text('Dashboard — coming soon')),
+            ),
       },
       home: const LandingScreen(),
     );

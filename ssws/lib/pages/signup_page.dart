@@ -1,7 +1,75 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class SignUpPage extends StatelessWidget {
+class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
+
+  @override
+  State<SignUpPage> createState() => _SignUpPageState();
+}
+
+class _SignUpPageState extends State<SignUpPage> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signUp() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      _showError('Please fill in all fields.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      await credential.user?.updateDisplayName(name);
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    } on FirebaseAuthException catch (e) {
+      _showError(_authErrorMessage(e.code));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
+  }
+
+  String _authErrorMessage(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'An account already exists for this email.';
+      case 'invalid-email':
+        return 'Invalid email address.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'operation-not-allowed':
+        return 'Email/password sign-up is not enabled.';
+      default:
+        return 'Sign up failed. Please try again.';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +146,8 @@ class SignUpPage extends StatelessWidget {
 
                         const _FieldLabel('Full Name'),
                         const SizedBox(height: 8),
-                        const _InputField(
+                        _InputField(
+                          controller: _nameController,
                           hintText: 'Enter your name',
                           icon: Icons.person_outline,
                         ),
@@ -87,17 +156,20 @@ class SignUpPage extends StatelessWidget {
 
                         const _FieldLabel('Email'),
                         const SizedBox(height: 8),
-                        const _InputField(
+                        _InputField(
+                          controller: _emailController,
                           hintText: 'Enter your email',
                           icon: Icons.mail_outline,
+                          keyboardType: TextInputType.emailAddress,
                         ),
 
                         const SizedBox(height: 18),
 
                         const _FieldLabel('Password'),
                         const SizedBox(height: 8),
-                        const _InputField(
-                          hintText: 'Create a password',
+                        _InputField(
+                          controller: _passwordController,
+                          hintText: 'Create a password (min. 6 characters)',
                           icon: Icons.lock_outline,
                           obscureText: true,
                         ),
@@ -107,7 +179,7 @@ class SignUpPage extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () {},
+                            onPressed: _isLoading ? null : _signUp,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF05B63D),
                               foregroundColor: Colors.white,
@@ -118,13 +190,22 @@ class SignUpPage extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                             ),
-                            child: const Text(
-                              'Create Account',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Create Account',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                         ),
 
@@ -204,20 +285,26 @@ class _FieldLabel extends StatelessWidget {
 }
 
 class _InputField extends StatelessWidget {
+  final TextEditingController controller;
   final String hintText;
   final IconData icon;
   final bool obscureText;
+  final TextInputType keyboardType;
 
   const _InputField({
+    required this.controller,
     required this.hintText,
     required this.icon,
     this.obscureText = false,
+    this.keyboardType = TextInputType.text,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       obscureText: obscureText,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(

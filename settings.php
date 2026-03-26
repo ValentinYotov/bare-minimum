@@ -63,7 +63,7 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
 
 <div class="ssws-page-head">
     <h1>Settings</h1>
-    <p>Alert notifications and emergency contact. Zone watering and thresholds are on the <a href="map.php">map</a>.</p>
+    <p>Alert notifications and emergency contact. Zone watering and thresholds are on the <a href="<?php echo htmlspecialchars(ssws_url("map.php"), ENT_QUOTES, "UTF-8"); ?>">map</a>.</p>
 </div>
 
 <section class="ssws-card" style="max-width: 560px">
@@ -90,14 +90,22 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
             Send email alerts when fire or critical warnings are detected
         </label>
 
-        <label for="emergency_phone">Emergency phone (browser only)</label>
+        <div class="ssws-settings-label-row">
+            <label for="emergency_phone">Emergency phone (browser only)</label>
+            <span class="ssws-tooltip-wrap">
+                <button type="button" class="ssws-info-btn" id="emergency_phone_info"
+                        aria-label="How emergency calling works"
+                        aria-describedby="emergency_phone_tooltip">?</button>
+                <span class="ssws-tooltip-bubble" id="emergency_phone_tooltip" role="tooltip">
+                    <span class="ssws-tooltip-bubble__line">Saved in this browser as you type. Use international format (e.g. +359…) for mobile.</span>
+                    <span class="ssws-tooltip-bubble__line"><strong>On a PC</strong>, “Call” opens an app on this computer (Phone Link, Skype, etc.) — it does not ring your phone unless that app is linked.</span>
+                    <span class="ssws-tooltip-bubble__line"><strong>On your phone’s browser</strong>, it opens the dialer.</span>
+                </span>
+            </span>
+        </div>
         <input type="tel" id="emergency_phone" name="emergency_phone"
                placeholder="+359 … or local services"
                autocomplete="tel">
-        <p class="ssws-settings-hint" id="emergency_phone_hint">
-            Saved in this browser as you type. Use international format (e.g. +359…) for mobile.
-            <strong>On a PC</strong>, “Call” opens an app on this computer (Phone Link, Skype, etc.) — it does not ring your phone unless that app is linked. <strong>On your phone’s browser</strong>, it opens the dialer.
-        </p>
         <p class="ssws-settings-test-row">
             <button type="button" class="ssws-btn-secondary" id="emergency_phone_test">Test call link</button>
             <span class="ssws-settings-test-note" id="emergency_phone_test_msg" aria-live="polite"></span>
@@ -144,7 +152,7 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
         return;
       }
       testMsg.textContent =
-        "Opening dialer for " + href + ". If nothing happens on a PC, read the note above.";
+        "Opening dialer for " + href + ". If nothing happens on a PC, hover the ? next to the field.";
       window.location.href = href;
     });
   }

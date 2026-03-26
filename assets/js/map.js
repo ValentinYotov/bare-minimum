@@ -1,4 +1,10 @@
 (function () {
+  if (typeof window.sswsApi !== "function") {
+    window.sswsApi = function (path) {
+      path = String(path || "").replace(/^\//, "");
+      return window.SSWS_BASE ? window.SSWS_BASE + "/" + path : path;
+    };
+  }
   var SVG_NS = "http://www.w3.org/2000/svg";
   var GRAD_FILLS = ["url(#gradA)", "url(#gradB)", "url(#gradC)"];
   var STROKES = ["#15803d", "#0369a1", "#4338ca"];
@@ -302,11 +308,21 @@
 
   function formatLive(s) {
     if (!s) return "No live data yet.";
+    var npk =
+      s.npk_n != null && s.npk_p != null && s.npk_k != null
+        ? " · NPK " +
+          Math.round(s.npk_n) +
+          "/" +
+          Math.round(s.npk_p) +
+          "/" +
+          Math.round(s.npk_k)
+        : "";
     return (
       "Live · " +
       (s.humidity != null ? Math.round(s.humidity) + "% humidity" : "—") +
       " · " +
       (s.temperature != null ? s.temperature + "°C" : "—") +
+      npk +
       " · smoke " +
       (s.smoke != null ? Math.round(s.smoke) + "%" : "—") +
       " · status: " +
@@ -400,7 +416,7 @@
   }
 
   function loadZoneRules() {
-    return fetch("api/zone_rules.php", { credentials: "same-origin" })
+    return fetch(window.sswsApi("api/zone_rules.php"), { credentials: "same-origin" })
       .then(function (r) {
         return r.json();
       })
@@ -423,7 +439,7 @@
   }
 
   function loadSensorsOnly() {
-    return fetch("api/get_sensors.php", { credentials: "same-origin" })
+    return fetch(window.sswsApi("api/get_sensors.php"), { credentials: "same-origin" })
       .then(function (r) {
         return r.json();
       })
@@ -646,7 +662,7 @@
   });
 
   function postZoneApi(body) {
-    return fetch("api/zone_rules.php", {
+    return fetch(window.sswsApi("api/zone_rules.php"), {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },

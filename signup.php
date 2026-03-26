@@ -1,6 +1,7 @@
 <?php
 session_start();
 require __DIR__ . "/config.php";
+require_once __DIR__ . "/includes/ssws_paths.php";
 
 if (isset($_SESSION["user"])) {
     header("Location: dashboard.php");
@@ -31,7 +32,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sign up — SSWS</title>
-    <link rel="stylesheet" href="assets/css/ssws.css">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(ssws_url("assets/css/ssws.css"), ENT_QUOTES, "UTF-8"); ?>">
 </head>
 <body class="ssws-auth-page">
     <div class="ssws-auth-card">
@@ -49,8 +50,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <input type="password" id="password" name="password" placeholder="••••••••" required>
             <button type="submit">Sign up</button>
         </form>
-        <p class="ssws-auth-footer">Already registered? <a href="login.php">Log in</a></p>
-        <p class="ssws-auth-footer"><a href="index.php">← Back to home</a></p>
+        <p class="ssws-auth-footer">Already registered? <a href="<?php echo htmlspecialchars(ssws_url("login.php"), ENT_QUOTES, "UTF-8"); ?>">Log in</a></p>
+        <p class="ssws-auth-footer"><a href="<?php echo htmlspecialchars(ssws_url("index.php"), ENT_QUOTES, "UTF-8"); ?>">← Back to home</a></p>
     </div>
 </body>
 </html>

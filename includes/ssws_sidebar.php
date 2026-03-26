@@ -20,13 +20,13 @@ $nav = [
             [$href, $label, $key, $icon] = $item;
             $isActive = ($ssws_active === $key);
             ?>
-            <a class="ssws-sidebar__link<?php echo $isActive ? " is-active" : ""; ?>" href="<?php echo htmlspecialchars($href, ENT_QUOTES, "UTF-8"); ?>" <?php if ($isActive) echo 'aria-current="page"'; ?>>
+            <a class="ssws-sidebar__link<?php echo $isActive ? " is-active" : ""; ?>" href="<?php echo htmlspecialchars(ssws_url($href), ENT_QUOTES, "UTF-8"); ?>" <?php if ($isActive) echo 'aria-current="page"'; ?>>
                 <span class="ssws-sidebar__icon"><?php echo $icon; ?></span>
                 <?php echo htmlspecialchars($label, ENT_QUOTES, "UTF-8"); ?>
             </a>
         <?php endforeach; ?>
     </nav>
     <div class="ssws-sidebar__footer">
-        <a class="ssws-sidebar__logout" href="logout.php">Log out</a>
+        <a class="ssws-sidebar__logout" href="<?php echo htmlspecialchars(ssws_url("logout.php"), ENT_QUOTES, "UTF-8"); ?>">Log out</a>
     </div>
 </aside>

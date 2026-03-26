@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "551081453608",
+    "project_id": "ssws-d7770",
+    "storage_bucket": "ssws-d7770.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:551081453608:android:a5874fa074ef2192182d1d",
+        "android_client_info": {
+          "package_name": "com.example.ssws"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9oQhZ0fhwIhQGpfzX07-jf3W_YSYT6pA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

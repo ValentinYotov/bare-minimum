@@ -16,7 +16,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 CHROMA_PERSIST_DIR = os.path.join(os.path.dirname(__file__), "chroma_db")
 # v2: uses numeric embeddings instead of text embeddings — forces re-ingestion
 COLLECTION_NAME = "crop_profiles_v3"
-CSV_PATH = os.path.join(os.path.dirname(__file__), "Crop_recommendation.csv")
+CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "Crop_recommendation.csv")
 RESULTS_FILE = os.path.join(os.path.dirname(__file__), "recommendations_result.txt")
 TOP_K = 15
 OPENAI_MODEL = "gpt-4o-mini"

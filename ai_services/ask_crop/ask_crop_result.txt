@@ -1,0 +1,27 @@
+================================================================================
+PLANT GROWTH COMPATIBILITY: MANGO
+================================================================================
+
+SENSOR READINGS:
+  Nitrogen (N):               20.0 kg/ha
+  Phosphorus (P):             15.0 kg/ha
+  Potassium (K):              10.0 kg/ha
+  Soil pH:                    5.0
+  Humidity:                   45.0%
+  Electrical Conductivity:    0.3 mS/cm
+
+GROWTH PROBABILITY:  40-50%
+ASSESSMENT: The soil is moderately suitable for growing mango, but several parameters are deficient.
+
+SOIL ADJUSTMENTS:
+--------------------------------------------------------------------------------
+✗ PHOSPHORUS (P): 15.0 (ideal: 17.0 - 37.0) [deficient]
+   → Apply 10 kg/ha of triple superphosphate to raise P from 15 to the ideal 17-37 range.
+
+✗ POTASSIUM (K): 10.0 (ideal: 26.0 - 34.0) [deficient]
+   → Apply 60 kg/ha of potassium sulfate to raise K from 10 to the ideal 26-34 range.
+
+✗ HUMIDITY: 45.0 (ideal: 46.16 - 53.75) [deficient]
+   → Increase irrigation to raise humidity levels closer to the ideal 46.16-53.75 range.
+
+================================================================================

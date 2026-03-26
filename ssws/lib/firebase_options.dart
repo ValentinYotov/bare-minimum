@@ -57,6 +57,7 @@ class DefaultFirebaseOptions {
     authDomain: 'ssws-d7770.firebaseapp.com',
     storageBucket: 'ssws-d7770.firebasestorage.app',
     measurementId: 'G-QS511DFP01',
+    databaseURL: 'https://ssws-d7770-default-rtdb.europe-west1.firebasedatabase.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -65,5 +66,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '551081453608',
     projectId: 'ssws-d7770',
     storageBucket: 'ssws-d7770.firebasestorage.app',
+    databaseURL: 'https://ssws-d7770-default-rtdb.europe-west1.firebasedatabase.app',
   );
 }

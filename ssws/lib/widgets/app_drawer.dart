@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 class AppDrawer extends StatelessWidget {
   final String selectedPage;
 
-  const AppDrawer({
-    super.key,
-    required this.selectedPage,
-  });
+  const AppDrawer({super.key, required this.selectedPage});
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +45,19 @@ class AppDrawer extends StatelessWidget {
               icon: Icons.dashboard_outlined,
               label: 'Dashboard',
               selected: selectedPage == 'dashboard',
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/home');
+              },
             ),
             _DrawerItem(
               icon: Icons.chat_bubble_outline,
               label: 'AI Chat',
               selected: selectedPage == 'chat',
-              onTap: () {},
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/chat');
+              },
             ),
             _DrawerItem(
               icon: Icons.lightbulb_outline,
@@ -135,4 +138,4 @@ class _DrawerItem extends StatelessWidget {
       ),
     );
   }
-}  
+}

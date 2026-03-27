@@ -42,20 +42,13 @@ Your task: recommend the most suitable crops to grow given the sensor data.
 
 Rules:
 - Prioritize crops that appear in the retrieved dataset profiles.
-- If the dataset profiles strongly agree, set confidence to "high".
-- If profiles are mixed or ambiguous, set confidence to "medium".
-- If no dataset profiles are relevant, fall back to general agronomic knowledge and set confidence to "low".
+- If no dataset profiles are relevant, fall back to general agronomic knowledge.
 - The sensor does not report temperature or rainfall; use the retrieved profiles as a proxy for those conditions.
 - The sensor reports electrical conductivity (EC); factor salinity tolerance into your reasoning when EC is notably high (above 2.0 mS/cm).
 - IMPORTANT: You MUST recommend AT LEAST 3 crops and at most 5 crops, ordered by suitability (most suitable first).
 - Return ONLY valid JSON with this exact structure, no markdown fences:
   {
-    "recommendations": [
-      {"crop": "...", "confidence": "high|medium|low", "reasoning": "..."}
-    ],
-    "data_source": "dataset|dataset+general_knowledge|general_knowledge",
-    "retrieved_profiles_used": <int>,
-    "notes": "..."|null
+    "crops": ["crop1", "crop2", "crop3"]
   }"""
 
 
@@ -72,17 +65,8 @@ class SensorReading(BaseModel):
     electrical_conductivity: float = Field(..., ge=0, description="Soil electrical conductivity (mS/cm)")
 
 
-class CropRecommendation(BaseModel):
-    crop: str
-    confidence: str
-    reasoning: str
-
-
 class RecommendationResponse(BaseModel):
-    recommendations: list[CropRecommendation]
-    data_source: str
-    retrieved_profiles_used: int
-    notes: str | None
+    crops: str  # semicolon-separated list
 
 
 # ---------------------------------------------------------------------------
@@ -193,19 +177,18 @@ def get_llm_recommendation(reading: SensorReading, profiles: list[dict]) -> dict
         response_format={"type": "json_object"},
         messages=messages,
         temperature=0.5,
-        max_tokens=800,
+        max_tokens=200,
     ).choices[0].message.content)
 
     # Retry if fewer than 3 crops returned
-    if len(result.get("recommendations", [])) < 3:
+    if len(result.get("crops", [])) < 3:
         messages.append({"role": "assistant", "content": json.dumps(result)})
         messages.append({
             "role": "user",
             "content": (
-                f"You only returned {len(result.get('recommendations', []))} crop(s). "
-                "This is not acceptable. You MUST return AT LEAST 3 crops. "
-                "Add more crops using your general agronomic knowledge if the dataset is not enough. "
-                "Return the full updated JSON now."
+                f"You only returned {len(result.get('crops', []))} crop(s). "
+                "You MUST return AT LEAST 3 crops. "
+                "Add more using your general agronomic knowledge if needed."
             ),
         })
         result = json.loads(client.chat.completions.create(
@@ -213,10 +196,10 @@ def get_llm_recommendation(reading: SensorReading, profiles: list[dict]) -> dict
             response_format={"type": "json_object"},
             messages=messages,
             temperature=0.7,
-            max_tokens=800,
+            max_tokens=200,
         ).choices[0].message.content)
 
-    return result
+    return {"crops": ";".join(result.get("crops", []))}
 
 
 # ---------------------------------------------------------------------------
@@ -243,33 +226,9 @@ app.add_middleware(
 )
 
 
-def _save_results_to_file(reading: SensorReading, response: RecommendationResponse) -> None:
+def _save_results_to_file(response: RecommendationResponse) -> None:
     with open(RESULTS_FILE, "w") as f:
-        f.write("=" * 80 + "\n")
-        f.write("CROP RECOMMENDATION RESULTS\n")
-        f.write("=" * 80 + "\n\n")
-
-        f.write("SENSOR READINGS:\n")
-        f.write(f"  Nitrogen (N): {reading.N} kg/ha\n")
-        f.write(f"  Phosphorus (P): {reading.P} kg/ha\n")
-        f.write(f"  Potassium (K): {reading.K} kg/ha\n")
-        f.write(f"  Soil pH: {reading.ph}\n")
-        f.write(f"  Humidity: {reading.humidity}%\n")
-        f.write(f"  Electrical Conductivity (EC): {reading.electrical_conductivity} mS/cm\n\n")
-
-        f.write("RECOMMENDATIONS:\n")
-        f.write("-" * 80 + "\n")
-        for i, rec in enumerate(response.recommendations, 1):
-            f.write(f"{i}. {rec.crop.upper()}\n")
-            f.write(f"   Confidence: {rec.confidence}\n")
-            f.write(f"   Reasoning: {rec.reasoning}\n\n")
-
-        f.write("-" * 80 + "\n")
-        f.write(f"Data Source: {response.data_source}\n")
-        f.write(f"Retrieved Profiles Used: {response.retrieved_profiles_used}\n")
-        if response.notes:
-            f.write(f"Notes: {response.notes}\n")
-        f.write("=" * 80 + "\n")
+        f.write(response.crops)
 
 
 @app.post("/recommendations", response_model=RecommendationResponse)
@@ -287,7 +246,7 @@ async def recommend(reading: SensorReading):
     try:
         raw = get_llm_recommendation(reading, profiles)
         response = RecommendationResponse(**raw)
-        _save_results_to_file(reading, response)
+        _save_results_to_file(response)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -18,14 +18,16 @@ OPENAI_MODEL = "gpt-4o-mini"
 
 SYSTEM_PROMPT = """You are an expert agronomist. You will be given:
 1. The user's current soil sensor readings.
-2. The ideal soil parameter ranges for a specific plant (derived from a validated crop dataset).
-3. A compatibility score (0-100) for each parameter showing how close the current soil is to ideal.
+2. Either ideal soil parameter ranges from a validated crop dataset, OR a note that the plant is not in the dataset.
+3. A compatibility score (0-100) for each parameter (only when dataset data is available).
 
 Your task: assess how suitable the current soil is for growing that plant, and recommend what to change.
 
 Rules:
-- Use the compatibility scores and ideal ranges to estimate a realistic probability range (e.g. "15-20%", "70-80%").
-- For each parameter that is not optimal, give a concrete, specific adjustment recommendation (e.g. "Apply 60 kg/ha of potassium sulfate to raise K from 15 to the ideal 28-50 range").
+- If the input is not a real plant (e.g. a random word, an animal, an object), return {"not_a_plant": true} and nothing else.
+- If dataset data is available, use it to estimate the probability range and adjustments.
+- If the plant is not in the dataset, use your general agronomic knowledge to determine ideal ranges and assess compatibility.
+- For each parameter that is not optimal, give a concrete, specific adjustment recommendation.
 - If a parameter is optimal, set status to "optimal" and adjustment to "No change needed".
 - Be honest: if the soil is very far from ideal, reflect that in the probability.
 - Return ONLY valid JSON with this exact structure, no markdown fences:
@@ -72,10 +74,11 @@ class SoilAdjustment(BaseModel):
 
 class PlantGrowthResponse(BaseModel):
     plant: str
-    probability_range: str
-    overall_assessment: str
-    adjustments: list[SoilAdjustment]
-    notes: str | None
+    probability_range: str | None = None
+    overall_assessment: str | None = None
+    adjustments: list[SoilAdjustment] | None = None
+    notes: str | None = None
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -90,13 +93,12 @@ def _get_plant_stats(plant_name: str) -> dict:
     if match is None:
         match = next((p for p in available if plant_name.lower() in p or p in plant_name.lower()), None)
     if match is None:
-        return {
-            "error": f"Plant '{plant_name}' not found. Available plants: {', '.join(sorted(available))}"
-        }
+        # Not in dataset — LLM will use general knowledge
+        return {"plant_name": plant_name.lower(), "in_dataset": False}
 
     plant_df = df[df["label"].str.lower() == match]
     features = ["N", "P", "K", "ph", "humidity"]
-    stats = {"plant_name": match, "sample_count": len(plant_df), "features": {}}
+    stats = {"plant_name": match, "in_dataset": True, "sample_count": len(plant_df), "features": {}}
 
     for feat in features:
         values = plant_df[feat]
@@ -132,44 +134,46 @@ def _get_status(value: float, ideal_min: float, ideal_max: float) -> str:
 # ---------------------------------------------------------------------------
 
 def _get_recommendation(request: PlantGrowthRequest, stats: dict) -> dict:
-    features = stats["features"]
-    sensor = {
-        "N": request.N,
-        "P": request.P,
-        "K": request.K,
-        "ph": request.ph,
-        "humidity": request.humidity,
-    }
-
-    scores_text = "\n".join(
-        f"  {feat}: current={sensor[feat]}, "
-        f"ideal={features[feat]['ideal_min']}-{features[feat]['ideal_max']}, "
-        f"status={_get_status(sensor[feat], features[feat]['ideal_min'], features[feat]['ideal_max'])}, "
-        f"score={_score_parameter(sensor[feat], features[feat]['ideal_min'], features[feat]['ideal_max'], features[feat]['std'])}/100"
-        for feat in features
-    )
-
-    overall_score = round(
-        sum(
-            _score_parameter(sensor[f], features[f]["ideal_min"], features[f]["ideal_max"], features[f]["std"])
-            for f in features
-        ) / len(features)
-    )
-
-    user_message = (
-        f"TARGET PLANT: {stats['plant_name']} (from {stats['sample_count']} dataset samples)\n\n"
+    sensor_text = (
         f"CURRENT SENSOR READINGS:\n"
         f"  Nitrogen (N): {request.N} kg/ha\n"
         f"  Phosphorus (P): {request.P} kg/ha\n"
         f"  Potassium (K): {request.K} kg/ha\n"
         f"  Soil pH: {request.ph}\n"
         f"  Humidity: {request.humidity}%\n"
-        f"  Electrical Conductivity (EC): {request.electrical_conductivity} mS/cm\n\n"
-        f"PARAMETER ANALYSIS (ideal = 10th-90th percentile from dataset):\n"
-        f"{scores_text}\n\n"
-        f"OVERALL COMPATIBILITY SCORE: {overall_score}/100\n\n"
-        f"Provide the growth probability and soil adjustment recommendations."
+        f"  Electrical Conductivity (EC): {request.electrical_conductivity} mS/cm\n"
     )
+
+    if stats.get("in_dataset"):
+        features = stats["features"]
+        sensor = {"N": request.N, "P": request.P, "K": request.K, "ph": request.ph, "humidity": request.humidity}
+        scores_text = "\n".join(
+            f"  {feat}: current={sensor[feat]}, "
+            f"ideal={features[feat]['ideal_min']}-{features[feat]['ideal_max']}, "
+            f"status={_get_status(sensor[feat], features[feat]['ideal_min'], features[feat]['ideal_max'])}, "
+            f"score={_score_parameter(sensor[feat], features[feat]['ideal_min'], features[feat]['ideal_max'], features[feat]['std'])}/100"
+            for feat in features
+        )
+        overall_score = round(
+            sum(_score_parameter(sensor[f], features[f]["ideal_min"], features[f]["ideal_max"], features[f]["std"]) for f in features)
+            / len(features)
+        )
+        user_message = (
+            f"TARGET PLANT: {stats['plant_name']} (from {stats['sample_count']} dataset samples)\n\n"
+            + sensor_text +
+            f"\nPARAMETER ANALYSIS (ideal = 10th-90th percentile from dataset):\n"
+            f"{scores_text}\n\n"
+            f"OVERALL COMPATIBILITY SCORE: {overall_score}/100\n\n"
+            f"Provide the growth probability and soil adjustment recommendations."
+        )
+    else:
+        user_message = (
+            f"TARGET PLANT: {stats['plant_name']} (not in dataset — use general agronomic knowledge)\n\n"
+            + sensor_text +
+            f"\nThe plant is not in the dataset. Use your general knowledge to assess compatibility "
+            f"and recommend soil adjustments. If '{stats['plant_name']}' is not a real plant, "
+            f"return {{\"not_a_plant\": true}}."
+        )
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     result = json.loads(
@@ -197,6 +201,11 @@ def _save_to_file(request: PlantGrowthRequest, response: PlantGrowthResponse) ->
         f.write("=" * 80 + "\n")
         f.write(f"PLANT GROWTH COMPATIBILITY: {response.plant.upper()}\n")
         f.write("=" * 80 + "\n\n")
+
+        if response.error:
+            f.write(f"Error: {response.error}\n")
+            f.write("=" * 80 + "\n")
+            return
 
         f.write("SENSOR READINGS:\n")
         f.write(f"  Nitrogen (N):               {request.N} kg/ha\n")
@@ -234,11 +243,15 @@ app = FastAPI(title="Ask Crop Service")
 @app.post("/plant-growth", response_model=PlantGrowthResponse)
 async def plant_growth(request: PlantGrowthRequest):
     stats = _get_plant_stats(request.plant)
-    if "error" in stats:
-        raise HTTPException(status_code=404, detail=stats["error"])
     try:
         raw = _get_recommendation(request, stats)
-        response = PlantGrowthResponse(**raw)
+        if raw.get("not_a_plant"):
+            response = PlantGrowthResponse(
+                plant=request.plant,
+                error=f"'{request.plant}' is not a valid plant."
+            )
+        else:
+            response = PlantGrowthResponse(**raw)
         _save_to_file(request, response)
         return response
     except Exception as e:

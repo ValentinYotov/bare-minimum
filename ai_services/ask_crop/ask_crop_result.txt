@@ -1,5 +1,5 @@
 ================================================================================
-PLANT GROWTH COMPATIBILITY: MANGO
+PLANT GROWTH COMPATIBILITY: CACTUS
 ================================================================================
 
 SENSOR READINGS:
@@ -10,18 +10,27 @@ SENSOR READINGS:
   Humidity:                   45.0%
   Electrical Conductivity:    0.3 mS/cm
 
-GROWTH PROBABILITY:  40-50%
-ASSESSMENT: The soil is moderately suitable for growing mango, but several parameters are deficient.
+GROWTH PROBABILITY:  60-75%
+ASSESSMENT: The current soil conditions are somewhat suitable for growing cacti, but adjustments are needed to optimize growth.
 
 SOIL ADJUSTMENTS:
 --------------------------------------------------------------------------------
-✗ PHOSPHORUS (P): 15.0 (ideal: 17.0 - 37.0) [deficient]
-   → Apply 10 kg/ha of triple superphosphate to raise P from 15 to the ideal 17-37 range.
+✗ NITROGEN (N): 20.0 (ideal: 5.0 - 15.0) [excess]
+   → Reduce nitrogen levels to around 10 kg/ha to prevent excessive growth and maintain health.
 
-✗ POTASSIUM (K): 10.0 (ideal: 26.0 - 34.0) [deficient]
-   → Apply 60 kg/ha of potassium sulfate to raise K from 10 to the ideal 26-34 range.
+✗ PHOSPHORUS (P): 15.0 (ideal: 5.0 - 10.0) [excess]
+   → Lower phosphorus levels to about 8 kg/ha to avoid toxicity.
 
-✗ HUMIDITY: 45.0 (ideal: 46.16 - 53.75) [deficient]
-   → Increase irrigation to raise humidity levels closer to the ideal 46.16-53.75 range.
+✓ POTASSIUM (K): 10.0 (ideal: 5.0 - 10.0) [optimal]
+   → No change needed
+
+✗ SOIL PH: 5.0 (ideal: 6.0 - 7.5) [deficient]
+   → Increase soil pH to around 6.5 by adding lime.
+
+✓ HUMIDITY: 45.0 (ideal: 30.0 - 50.0) [optimal]
+   → No change needed
+
+✓ ELECTRICAL CONDUCTIVITY (EC): 0.3 (ideal: 0.2 - 1.0) [optimal]
+   → No change needed
 
 ================================================================================

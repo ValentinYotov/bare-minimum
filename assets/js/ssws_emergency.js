@@ -1,4 +1,10 @@
 (function () {
+  if (typeof window.sswsApi !== "function") {
+    window.sswsApi = function (path) {
+      path = String(path || "").replace(/^\//, "");
+      return window.SSWS_BASE ? window.SSWS_BASE + "/" + path : path;
+    };
+  }
   var POLL_MS = 5000;
   var STORAGE = "ssws_emergency_phone";
   var LEGACY = "agroguard_emergency_phone";
@@ -62,7 +68,7 @@
   var lastFireIds = new Set();
 
   function poll() {
-    fetch("api/get_sensors.php", { credentials: "same-origin" })
+    fetch(window.sswsApi("api/get_sensors.php"), { credentials: "same-origin" })
       .then(function (r) {
         if (!r.ok) return null;
         return r.json();

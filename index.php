@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . "/includes/ssws_paths.php";
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -13,7 +15,7 @@ if (isset($_SESSION["user"])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smart Soil Watering System — SSWS</title>
-    <link rel="stylesheet" href="assets/css/ssws.css">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(ssws_url("assets/css/ssws.css"), ENT_QUOTES, "UTF-8"); ?>">
 </head>
 <body class="ssws-landing">
     <section class="ssws-hero">
@@ -23,8 +25,8 @@ if (isset($_SESSION["user"])) {
                 <p class="ssws-hero__subtitle">Smart irrigation and safety for your crops</p>
                 <p class="ssws-hero__desc">Monitor soil moisture, detect fire hazards, and get AI-powered crop recommendations — all in one intelligent system.</p>
                 <div class="ssws-hero__actions">
-                    <a class="ssws-btn-pill ssws-btn-pill--solid" href="login.php">Login</a>
-                    <a class="ssws-btn-pill ssws-btn-pill--ghost" href="signup.php">Sign Up</a>
+                    <a class="ssws-btn-pill ssws-btn-pill--solid" href="<?php echo htmlspecialchars(ssws_url("login.php"), ENT_QUOTES, "UTF-8"); ?>">Login</a>
+                    <a class="ssws-btn-pill ssws-btn-pill--ghost" href="<?php echo htmlspecialchars(ssws_url("signup.php"), ENT_QUOTES, "UTF-8"); ?>">Sign Up</a>
                 </div>
             </div>
             <div class="ssws-hero__image-wrap">

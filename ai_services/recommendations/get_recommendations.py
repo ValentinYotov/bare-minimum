@@ -1,6 +1,7 @@
 import json
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import chromadb
 import numpy as np
@@ -11,9 +12,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
+# ai_services/.env — use absolute path so cwd / uvicorn reload does not matter.
+# override=True: a blank OPENAI_API_KEY in the Windows user env would otherwise block .env.
+_AI_SERVICES_DIR = Path(__file__).resolve().parent.parent
+for _env_candidate in (_AI_SERVICES_DIR / ".env", _AI_SERVICES_DIR.parent / ".env"):
+    if _env_candidate.is_file():
+        load_dotenv(_env_candidate, override=True)
+        break
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip().strip('"').strip("'")
 CHROMA_PERSIST_DIR = os.path.join(os.path.dirname(__file__), "chroma_db")
 # v2: uses numeric embeddings instead of text embeddings — forces re-ingestion
 COLLECTION_NAME = "crop_profiles_v3"
@@ -226,6 +233,15 @@ def _save_results_to_file(response: RecommendationResponse) -> None:
 
 @app.post("/recommendations", response_model=RecommendationResponse)
 async def recommend(reading: SensorReading):
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OPENAI_API_KEY is empty after loading .env. "
+                f"Expected file: {_AI_SERVICES_DIR / '.env'} "
+                "— or unset a blank OPENAI_API_KEY in Windows environment variables."
+            ),
+        )
     profiles = query_similar_profiles(collection, reading)
     try:
         raw = get_llm_recommendation(reading, profiles)

@@ -83,5 +83,5 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
     </article>
 </div>
 
-<script src="assets/js/alerts.js" defer></script>
+<script src="<?php echo htmlspecialchars(ssws_url("assets/js/alerts.js"), ENT_QUOTES, "UTF-8"); ?>" defer></script>
 <?php require_once __DIR__ . "/includes/ssws_app_end.php"; ?>

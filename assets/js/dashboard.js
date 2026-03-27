@@ -1,4 +1,10 @@
 (function () {
+  if (typeof window.sswsApi !== "function") {
+    window.sswsApi = function (path) {
+      path = String(path || "").replace(/^\//, "");
+      return window.SSWS_BASE ? window.SSWS_BASE + "/" + path : path;
+    };
+  }
   var wateringBtn = document.getElementById("ssws-btn-start-watering");
   var badge = document.getElementById("ssws-watering-badge");
   var key = "ssws_watering_active";
@@ -49,7 +55,7 @@
   var qReport = document.getElementById("ssws-qa-download");
   if (qReport) {
     qReport.addEventListener("click", function () {
-      fetch("api/get_logs.php", { credentials: "same-origin" })
+      fetch(window.sswsApi("api/get_logs.php"), { credentials: "same-origin" })
         .then(function (r) {
           return r.json();
         })

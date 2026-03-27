@@ -113,5 +113,5 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
     </div>
 </div>
 
-<script src="assets/js/map.js" defer></script>
+<script src="<?php echo htmlspecialchars(ssws_url("assets/js/map.js"), ENT_QUOTES, "UTF-8"); ?>" defer></script>
 <?php require_once __DIR__ . "/includes/ssws_app_end.php"; ?>

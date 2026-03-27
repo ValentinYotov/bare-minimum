@@ -14,5 +14,6 @@ __pycache__/
 .venv/
 venv/
 env/
+
 # Recommendation output
 ai_services/recommendations/recommendations_result.txt

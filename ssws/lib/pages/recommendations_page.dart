@@ -9,7 +9,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/top_navbar.dart';
 
 // --- Change these to match your local server addresses ---
-const String _kWsUrl = 'ws://localhost:8765';
+const String _kWsUrl  = 'ws://localhost:8765';
 const String _kApiUrl = 'http://localhost:8002/recommendations';
 
 class _AiCropResult {
@@ -39,20 +39,20 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   String? _errorMessage;
   String _statusText = '';
 
-  double _nitrogen = 0;
+  double _nitrogen   = 0;
   double _phosphorus = 0;
-  double _potassium = 0;
-  double _ph = 0;
-  double _humidity = 0;
-  double _ec = 0;
+  double _potassium  = 0;
+  double _ph         = 0;
+  double _humidity   = 0;
+  double _ec         = 0;
 
   List<_AiCropResult> _results = [];
 
   Future<void> _startSensorReading() async {
     setState(() {
-      _isReading = true;
-      _errorMessage = null;
-      _statusText = 'Waiting for sensor data...';
+      _isReading     = true;
+      _errorMessage  = null;
+      _statusText    = 'Waiting for sensor data...';
     });
 
     try {
@@ -61,20 +61,21 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
       if (sensor == null) {
         setState(() {
           _errorMessage =
-              'Could not get valid sensor readings. Make sure the sensor server (main.py) is running and the NPK sensor is connected.';
-          _isReading = false;
+              'Could not get valid sensor readings. Make sure the sensor server '
+              '(main.py) is running and the NPK sensor is connected.';
+          _isReading  = false;
           _statusText = '';
         });
         return;
       }
 
       setState(() {
-        _nitrogen = sensor['N']!;
+        _nitrogen   = sensor['N']!;
         _phosphorus = sensor['P']!;
-        _potassium = sensor['K']!;
-        _ph = sensor['ph']!;
-        _humidity = sensor['humidity']!;
-        _ec = sensor['ec']!;
+        _potassium  = sensor['K']!;
+        _ph         = sensor['ph']!;
+        _humidity   = sensor['humidity']!;
+        _ec         = sensor['ec']!;
         _statusText = 'Fetching AI recommendations...';
       });
 
@@ -82,16 +83,16 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
       final recs = await _fetchRecommendations(sensor);
 
       setState(() {
-        _results = recs;
+        _results       = recs;
         _hasReadSensor = true;
-        _isReading = false;
-        _statusText = '';
+        _isReading     = false;
+        _statusText    = '';
       });
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
-        _isReading = false;
-        _statusText = '';
+        _isReading    = false;
+        _statusText   = '';
       });
     }
   }
@@ -107,7 +108,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     try {
       channel = WebSocketChannel.connect(Uri.parse(_kWsUrl));
 
-      // Wait for handshake — timeout separately so we fail fast if server is down
+      // Fail fast if the server is unreachable
       try {
         await channel.ready.timeout(const Duration(seconds: 10));
       } catch (_) {
@@ -121,18 +122,25 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             final data = json.decode(raw.toString()) as Map<String, dynamic>;
 
             final n   = _tryParse(data['Nitrogen (N)']);
+            // BUG FIX: key was 'Phosphorous (P)' on some firmware versions.
+            // main.py normalises it to 'Phosphorus (P)' — match that here.
             final p   = _tryParse(data['Phosphorus (P)']);
             final k   = _tryParse(data['Potassium (K)']);
             final ph  = _tryParse(data['pH Level']);
             final hum = _tryParse(data['humidity']);
             final ec  = _tryParse(data['Electrical Conductivity (EC)']);
 
-            if (n != null && p != null && k != null &&
-                ph != null && hum != null && ec != null) {
+            if (n   != null &&
+                p   != null &&
+                k   != null &&
+                ph  != null &&
+                hum != null &&
+                ec  != null) {
               completer.complete(
-                  {'N': n, 'P': p, 'K': k, 'ph': ph, 'humidity': hum, 'ec': ec});
+                {'N': n, 'P': p, 'K': k, 'ph': ph, 'humidity': hum, 'ec': ec},
+              );
             }
-            // all Error 0xE2 → keep waiting for the next broadcast cycle
+            // If any field is missing / Error 0xE2, keep waiting for the next cycle
           } catch (_) {}
         },
         onError: (_) {
@@ -144,14 +152,17 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         cancelOnError: false,
       );
 
+      // BUG FIX: increased from 90 s to 120 s.
+      // main.py sleeps 5 s after receiving Potassium (the last key in the cycle)
+      // before broadcasting, so a full cycle can take well over 90 s on a slow
+      // sensor.  120 s gives comfortable headroom.
       return await completer.future.timeout(
-        const Duration(seconds: 90),
+        const Duration(seconds: 120),
         onTimeout: () => null,
       );
     } catch (_) {
       return null;
     } finally {
-      // Always clean up — cancel subscription and close channel
       await sub?.cancel();
       try {
         await channel?.sink.close();
@@ -171,17 +182,20 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   // ---------------------------------------------------------------------------
   Future<List<_AiCropResult>> _fetchRecommendations(
       Map<String, double> sensor) async {
+    // BUG FIX: the Pydantic model in get_recommendations.py expects the field
+    // named 'electrical_conductivity', not 'ec'.  The map key is 'ec' (internal
+    // shorthand), so we must expand it to the full name here.
     final response = await http
         .post(
           Uri.parse(_kApiUrl),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
-            'N': sensor['N'],
-            'P': sensor['P'],
-            'K': sensor['K'],
-            'ph': sensor['ph'],
-            'humidity': sensor['humidity'],
-            'electrical_conductivity': sensor['ec'],
+            'N':                        sensor['N'],
+            'P':                        sensor['P'],
+            'K':                        sensor['K'],
+            'ph':                       sensor['ph'],
+            'humidity':                 sensor['humidity'],
+            'electrical_conductivity':  sensor['ec'],   // ← correct field name
           }),
         )
         .timeout(const Duration(seconds: 60));
@@ -195,13 +209,13 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     final recs = body['recommendations'] as List;
 
     return recs.map((r) {
-      final name = r['crop'] as String;
+      final name    = r['crop'] as String;
       final matched = CropRepository.crops
           .where((c) => c.name.toLowerCase() == name.toLowerCase());
       return _AiCropResult(
-        cropName: name,
-        confidence: r['confidence'] as String,
-        reasoning: r['reasoning'] as String,
+        cropName:    name,
+        confidence:  r['confidence'] as String,
+        reasoning:   r['reasoning']  as String,
         matchedCrop: matched.isNotEmpty ? matched.first : null,
       );
     }).toList();
@@ -295,8 +309,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  _detailRow('Water Needs', crop.waterNeeds),
-                  _detailRow('Growth Time', crop.growthTime),
+                  _detailRow('Water Needs',    crop.waterNeeds),
+                  _detailRow('Growth Time',    crop.growthTime),
                   _detailRow('Expected Yield', crop.expectedYield),
                   _detailRow('Best Soil Type', crop.suitableSoil),
                   _detailRow(
@@ -483,9 +497,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   const SizedBox(height: 12),
                   _SoilValueCard(
                     label: 'Soil pH',
-                    value: _hasReadSensor
-                        ? _ph.toStringAsFixed(2)
-                        : '--',
+                    value: _hasReadSensor ? _ph.toStringAsFixed(2) : '--',
                   ),
                   const SizedBox(height: 12),
                   _SoilValueCard(
@@ -528,7 +540,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: const Text(
-                  'Press "Start Reading from NPK Sensor" to read your soil sensor and generate AI crop recommendations.',
+                  'Press "Start Reading from NPK Sensor" to read your soil sensor '
+                  'and generate AI crop recommendations.',
                   style: TextStyle(
                     fontSize: 16,
                     color: Color(0xFF64748B),
@@ -665,7 +678,6 @@ class _CropResultCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Image (if matched in repository)
           if (crop != null)
             Stack(
               children: [
@@ -692,7 +704,6 @@ class _CropResultCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Name + badge (if no image)
                 if (crop == null)
                   Row(
                     children: [
@@ -739,7 +750,6 @@ class _CropResultCard extends StatelessWidget {
                   ),
                 ),
 
-                // Crop details (if matched)
                 if (crop != null) ...[
                   const SizedBox(height: 16),
                   Row(
@@ -843,8 +853,7 @@ class _CropMetaItem extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 value,
-                style:
-                    const TextStyle(fontSize: 15, color: Color(0xFF111827)),
+                style: const TextStyle(fontSize: 15, color: Color(0xFF111827)),
               ),
             ],
           ),

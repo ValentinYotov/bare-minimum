@@ -17,6 +17,7 @@
   var BASE_TEMPLATE = {
     display_name: "",
     subtitle: "",
+    planted_crop: "",
     svg_x: 8,
     svg_y: 8,
     svg_w: 180,
@@ -51,6 +52,10 @@
   var t1Val = document.getElementById("zone-t1-val");
   var t2Val = document.getElementById("zone-t2-val");
   var smVal = document.getElementById("zone-smoke-val");
+  var humAiHint = document.getElementById("zone-humidity-ai-hint");
+  var cropSelect = document.getElementById("zone-planted-crop");
+  var zoneAiHumSeq = 0;
+  var nameAiHumTimer = null;
   var saveBtn = document.getElementById("ssws-zone-save");
   var addBtn = document.getElementById("ssws-zone-add");
   var removeBtn = document.getElementById("ssws-zone-remove");
@@ -108,6 +113,7 @@
       smoke_alert_pct: sm,
       display_name: o.display_name != null ? String(o.display_name) : "",
       subtitle: o.subtitle != null ? String(o.subtitle) : "",
+      planted_crop: o.planted_crop != null ? String(o.planted_crop) : "",
       svg_x: x,
       svg_y: y,
       svg_w: w,
@@ -344,7 +350,67 @@
     if (t2In) t2In.value = String(r.temp_warning_max_c);
     if (smIn) smIn.value = String(Math.round(r.smoke_alert_pct));
     if (nameIn) nameIn.value = r.display_name || "";
+    if (cropSelect) {
+      var pc = r.planted_crop != null ? String(r.planted_crop) : "";
+      var found = false;
+      for (var ci = 0; ci < cropSelect.options.length; ci++) {
+        if (cropSelect.options[ci].value === pc) {
+          found = true;
+          break;
+        }
+      }
+      cropSelect.value = found ? pc : "";
+    }
     syncOutputs();
+  }
+
+  function fetchZoneAiHumidity(zoneKey) {
+    if (humAiHint) {
+      humAiHint.hidden = true;
+      humAiHint.textContent = "";
+    }
+    var seq = ++zoneAiHumSeq;
+    var aiBody = { zone_key: zoneKey };
+    if (cropSelect) {
+      aiBody.planted_crop = cropSelect.value || "";
+    }
+    if (nameIn) {
+      aiBody.display_name = nameIn.value || "";
+    }
+    fetch(window.sswsApi("api/map_zone_ai_humidity.php"), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(aiBody),
+    })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (seq !== zoneAiHumSeq || activeZone !== zoneKey) return;
+        if (!data || !data.ok || !humIn) return;
+        var pct = parseInt(data.humidity_water_below_pct, 10);
+        if (isNaN(pct) || pct < 5 || pct > 90) return;
+        humIn.value = String(pct);
+        syncOutputs();
+        if (humAiHint) {
+          var crop = data.crop_display || data.crop_label || "crop";
+          var p25 = data.humidity_p25 != null ? " (dataset humidity p25 ≈ " + data.humidity_p25 + "%)" : "";
+          var src = data.source || "Crop_recommendation.csv";
+          var sim =
+            data.dataset_similarity != null ? " Similarity to nearest row: " + data.dataset_similarity + "." : "";
+          humAiHint.textContent =
+            "Suggested for " + crop + " — " + src + p25 + sim + " Slider updated; use Save all zones to store.";
+          humAiHint.hidden = false;
+        }
+      })
+      .catch(function () {
+        if (seq !== zoneAiHumSeq || activeZone !== zoneKey) return;
+        if (humAiHint) {
+          humAiHint.textContent = "";
+          humAiHint.hidden = true;
+        }
+      });
   }
 
   function previewLayoutFromForm() {
@@ -356,6 +422,7 @@
       temp_warning_max_c: parseFloat(t2In.value),
       smoke_alert_pct: parseFloat(smIn.value),
       display_name: nameIn ? nameIn.value : "",
+      planted_crop: cropSelect ? cropSelect.value : "",
     });
     renderMap();
   }
@@ -376,6 +443,7 @@
       headEl.classList.add(mod === 0 ? "ss-map-zone-head--a" : mod === 1 ? "ss-map-zone-head--b" : "ss-map-zone-head--c");
     }
     applyRulesToInputs(z);
+    fetchZoneAiHumidity(z);
     var s = sensorForZone(z);
     if (liveEl) liveEl.textContent = formatLive(s);
     if (msgEl) msgEl.textContent = "";
@@ -650,8 +718,25 @@
   });
 
   if (nameIn) {
-    nameIn.addEventListener("input", previewLayoutFromForm);
+    nameIn.addEventListener("input", function () {
+      previewLayoutFromForm();
+      clearTimeout(nameAiHumTimer);
+      nameAiHumTimer = setTimeout(function () {
+        if (activeZone) {
+          fetchZoneAiHumidity(activeZone);
+        }
+      }, 400);
+    });
     nameIn.addEventListener("change", previewLayoutFromForm);
+  }
+
+  if (cropSelect) {
+    cropSelect.addEventListener("change", function () {
+      if (!activeZone) return;
+      commitZoneRule(activeZone, { planted_crop: cropSelect.value });
+      previewLayoutFromForm();
+      fetchZoneAiHumidity(activeZone);
+    });
   }
 
   [humIn, t1In, t2In, smIn].forEach(function (inp) {
@@ -687,6 +772,7 @@
       svg_h: r.svg_h,
       marker_x: r.marker_x,
       marker_y: r.marker_y,
+      planted_crop: r.planted_crop || "",
       humidity_water_below_pct: r.humidity_water_below_pct,
       temp_normal_max_c: r.temp_normal_max_c,
       temp_warning_max_c: r.temp_warning_max_c,
@@ -802,8 +888,35 @@
     });
   }
 
-  loadZoneRules().then(function () {
-    return loadSensorsOnly();
+  function loadCropLabels() {
+    if (!cropSelect) {
+      return Promise.resolve();
+    }
+    return fetch(window.sswsApi("api/crop_labels.php"), { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data || !data.ok || !Array.isArray(data.labels)) {
+          return;
+        }
+        while (cropSelect.options.length > 1) {
+          cropSelect.remove(1);
+        }
+        data.labels.forEach(function (lb) {
+          var o = document.createElement("option");
+          o.value = lb;
+          o.textContent = lb.charAt(0).toUpperCase() + lb.slice(1);
+          cropSelect.appendChild(o);
+        });
+      })
+      .catch(function () {});
+  }
+
+  loadCropLabels().then(function () {
+    return loadZoneRules().then(function () {
+      return loadSensorsOnly();
+    });
   });
   setInterval(loadSensorsOnly, 15000);
 })();

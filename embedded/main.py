@@ -10,8 +10,22 @@ from dotenv import load_dotenv
 #api_token = os.getenv("API_KEY")
 
 api_token = "api-key"
-arduino = serial.Serial('COM4', 9600)
-time.sleep(2)
+SERIAL_PORT = 'COM4'
+BAUD_RATE = 9600
+
+def open_serial():
+    """Open serial port, retrying until success."""
+    while True:
+        try:
+            s = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+            time.sleep(2)
+            print(f"Serial connected on {SERIAL_PORT}")
+            return s
+        except serial.SerialException as e:
+            print(f"Serial open failed ({e}), retrying in 3s...")
+            time.sleep(3)
+
+arduino = open_serial()
 clients = set()
 latest_sensor_data = ""
 
@@ -83,7 +97,7 @@ async def handle_client(websocket):
 
 # ---------------------- BROADCAST DATA ----------------------
 async def broadcast_sensor_data():
-    global latest_sensor_data
+    global latest_sensor_data, arduino
     full_data = {}
 
     while True:
@@ -93,8 +107,8 @@ async def broadcast_sensor_data():
                 line = arduino.readline().decode('utf-8', errors='ignore').strip()
                 print(f"Raw from Arduino: {line}")
 
-                # No | means it's a header/separator line — skip but don't continue
-                # (we must always reach the await asyncio.sleep below to yield to asyncio)
+                # No | means it's a header/separator line — skip processing but
+                # still fall through to await asyncio.sleep to yield the event loop
                 if '|' in line:
                     sensor_name, _ = line.split('|', 1)
                     data = parse_sensor_line(line)
@@ -113,8 +127,21 @@ async def broadcast_sensor_data():
                                 try:
                                     await client.send(json_data)
                                 except Exception:
-                                    clients.discard(client)  # discard — no KeyError
+                                    clients.discard(client)
                         full_data.clear()
+
+        except serial.SerialException as e:
+            # Hardware-level COM port error (e.g. ClearCommError, device disconnected)
+            # Close the broken port and reconnect — runs in executor to avoid blocking asyncio
+            print(f"Serial error: {e} — reconnecting...")
+            full_data.clear()
+            try:
+                arduino.close()
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+            loop = asyncio.get_event_loop()
+            arduino = await loop.run_in_executor(None, open_serial)
 
         except Exception as e:
             print(f"Broadcast loop error (continuing): {e}")

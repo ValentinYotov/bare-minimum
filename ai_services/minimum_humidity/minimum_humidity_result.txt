@@ -1,0 +1,2 @@
+Plant: rice
+Minimum humidity: 80.12%

@@ -8,6 +8,7 @@ import openai
 import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -226,6 +227,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Crop Recommendation Service", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 def _save_results_to_file(reading: SensorReading, response: RecommendationResponse) -> None:

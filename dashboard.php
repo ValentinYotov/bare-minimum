@@ -73,5 +73,5 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
     </div>
 </section>
 
-<script src="assets/js/dashboard.js" defer></script>
+<script src="<?php echo htmlspecialchars(ssws_url("assets/js/dashboard.js"), ENT_QUOTES, "UTF-8"); ?>" defer></script>
 <?php require_once __DIR__ . "/includes/ssws_app_end.php"; ?>

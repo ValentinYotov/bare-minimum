@@ -1,0 +1,46 @@
+{
+  "version": 3,
+  "description": "Runtime serves local files listed in file (relative to project root). Optional unsplash is the Unsplash image URL to download for that file — use Unsplash.com → image → Download (or copy image address), paste here, then run: php tools/download_crop_images_from_registry.php. Add new keys as your model returns more crops.",
+  "fallback_image": "assets/crops/maize.png",
+  "download_dir": "assets/crops/imports",
+  "label_images": {
+    "apple": { "file": "assets/crops/imports/apple.jpg", "unsplash": "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=1600&q=80" },
+    "banana": { "file": "assets/crops/imports/banana.jpg", "unsplash": "https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=1600&q=80" },
+    "blackgram": { "file": "assets/crops/imports/blackgram.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "chickpea": { "file": "assets/crops/imports/chickpea.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "coconut": { "file": "assets/crops/imports/coconut.jpg", "unsplash": "https://images.unsplash.com/photo-1528824628098-900640b7d4cb?auto=format&fit=crop&w=1600&q=80" },
+    "coffee": { "file": "assets/crops/imports/coffee.jpg", "unsplash": "https://images.unsplash.com/photo-1447933601403-0c6688de566e?auto=format&fit=crop&w=1600&q=80" },
+    "cotton": { "file": "assets/crops/imports/cotton.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "grapes": { "file": "assets/crops/imports/grapes.jpg", "unsplash": "https://images.unsplash.com/photo-1537640538966-79bb73571355?auto=format&fit=crop&w=1600&q=80" },
+    "jute": { "file": "assets/crops/imports/jute.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "kidneybeans": { "file": "assets/crops/imports/kidneybeans.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "lentil": { "file": "assets/crops/imports/lentil.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "maize": { "file": "assets/crops/maize.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "mango": { "file": "assets/crops/imports/mango.jpg", "unsplash": "https://images.unsplash.com/photo-1605027990121-c57e63adc377?auto=format&fit=crop&w=1600&q=80" },
+    "mothbeans": { "file": "assets/crops/imports/mothbeans.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "mungbean": { "file": "assets/crops/imports/mungbean.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "muskmelon": { "file": "assets/crops/imports/muskmelon.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "orange": { "file": "assets/crops/imports/orange.jpg", "unsplash": "https://images.unsplash.com/photo-1547514701-42782101795e?auto=format&fit=crop&w=1600&q=80" },
+    "papaya": { "file": "assets/crops/imports/papaya.jpg", "unsplash": "https://images.unsplash.com/photo-1517282009859-f000e3a9c14c?auto=format&fit=crop&w=1600&q=80" },
+    "pigeonpeas": { "file": "assets/crops/imports/pigeonpeas.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "pomegranate": { "file": "assets/crops/imports/pomegranate.jpg", "unsplash": "https://images.unsplash.com/photo-1541344992884-23a74cb7d677?auto=format&fit=crop&w=1600&q=80" },
+    "rice": { "file": "assets/crops/imports/rice.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    "watermelon": { "file": "assets/crops/imports/watermelon.jpg", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" }
+  },
+  "aliases": {
+    "corn": "maize"
+  },
+  "keyword_rules": [
+    { "match": "winter wheat", "file": "assets/crops/wheat.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "sunflower", "file": "assets/crops/sunflower.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "soybean", "file": "assets/crops/soybean.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "soybeans", "file": "assets/crops/soybean.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "barley", "file": "assets/crops/wheat.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "wheat", "file": "assets/crops/wheat.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "corn", "file": "assets/crops/maize.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "maize", "file": "assets/crops/maize.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "bean", "file": "assets/crops/soybean.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "gram", "file": "assets/crops/soybean.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" },
+    { "match": "pea", "file": "assets/crops/soybean.png", "unsplash": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1600&q=80" }
+  ]
+}

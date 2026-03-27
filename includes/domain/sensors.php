@@ -14,6 +14,12 @@ function ssws_mock_sensor_row(string $username, string $zoneKey, array $zoneRule
     $hum = 25 + ($seed % 55);
     $temp = 18 + ($seed % 28);
     $smoke = 25 + ($seed % 55);
+    $npkN = 60 + ($seed % 80);
+    $npkP = 28 + ($seed % 45);
+    $npkK = 30 + ($seed % 50);
+    $soilPh = round(5.5 + ($seed % 25) / 10, 2);
+    $soilEc = round(0.25 + ($seed % 180) / 100, 2);
+    $soilMoist = 40 + ($seed % 50);
     $display = trim((string) ($zoneRule["display_name"] ?? ""));
     $loc = $display !== "" ? $display : $zoneKey;
 
@@ -25,6 +31,12 @@ function ssws_mock_sensor_row(string $username, string $zoneKey, array $zoneRule
         "temperature" => $temp,
         "smoke" => $smoke,
         "humidity" => $hum,
+        "npk_n" => $npkN,
+        "npk_p" => $npkP,
+        "npk_k" => $npkK,
+        "soil_ph" => $soilPh,
+        "soil_ec" => $soilEc,
+        "soil_moisture_pct" => $soilMoist,
         "battery" => 40 + ($seed % 60),
         "signal" => $seed % 3 === 0 ? "Good" : ($seed % 3 === 1 ? "Fair" : "Weak"),
     ];

@@ -1,2 +1,2 @@
-Plant: rice
-Minimum humidity: 80.12%
+Plant: banana
+Minimum humidity: 76.5%

@@ -1,15 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../widgets/app_drawer.dart';
 import '../widgets/info_card.dart';
+
+const String _kHumidityApiUrl = 'http://localhost:8003/minimum-humidity';
 
 // ── Icon registry (constant instances for tree shaking) ──────────────────────
 
 const _kIconMap = <String, IconData>{
   'water_drop': Icons.water_drop_outlined,
-  'fire': Icons.local_fire_department_outlined,
+  'fire': Icons.local_fire_department_outlined,  
   'sensors_off': Icons.sensors_off_outlined,
   'thermostat': Icons.thermostat_outlined,
   'air': Icons.air,
@@ -153,6 +157,10 @@ class MapViewPage extends StatefulWidget {
 
 class _MapViewPageState extends State<MapViewPage> {
   // Static cache — tagged with UID so it invalidates on user switch
+  final TextEditingController _plantController = TextEditingController();
+
+  String? _humidityResult;
+  bool _isLoadingHumidity = false;
   static String? _savedUid;
   static List<FieldZone>? _savedZones;
   static int _savedSelectedIndex = 0;
@@ -208,6 +216,52 @@ class _MapViewPageState extends State<MapViewPage> {
     _savedNextId = _nextId;
     super.dispose();
   }
+
+  Future<void> _fetchMinimumHumidity() async {
+    final plant = _plantController.text.trim();
+
+    if (plant.isEmpty) return;
+
+    setState(() {
+      _isLoadingHumidity = true;
+      _humidityResult = null;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse(_kHumidityApiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'plant': plant}),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        if (data['error'] != null) {
+          setState(() {
+            _humidityResult = data['error'];
+          });
+        } else {
+          setState(() {
+            _humidityResult =
+                "Minimum humidity: ${data['minimum_humidity']}%";
+          });
+        }
+      } else {
+        setState(() {
+          _humidityResult = "Error: ${data.toString()}";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _humidityResult = "Connection error: $e";
+      });
+    } finally {
+      setState(() {
+        _isLoadingHumidity = false;
+      });
+    }
+}
 
   // ── Firestore I/O ─────────────────────────────────────────────────────────
 
@@ -706,6 +760,83 @@ class _MapViewPageState extends State<MapViewPage> {
                 ],
               ),
             ),
+
+            const SizedBox(height: 16),
+
+InfoCard(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        "AI Minimum Humidity",
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF111827),
+        ),
+      ),
+      const SizedBox(height: 12),
+
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _plantController,
+              decoration: InputDecoration(
+                hintText: "Enter plant (e.g. tomato)",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: _isLoadingHumidity ? null : _fetchMinimumHumidity,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: _isLoadingHumidity
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text("Find"),
+          ),
+        ],
+      ),
+
+      const SizedBox(height: 12),
+
+      if (_humidityResult != null)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            _humidityResult!,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+    ],
+  ),
+),
 
             const SizedBox(height: 16),
 

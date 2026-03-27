@@ -8,8 +8,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SERIAL_PORT = 'COM4'
-BAUD_RATE = 9600
+SERIAL_PORT = os.getenv("SERIAL_PORT", "COM4")
+BAUD_RATE = int(os.getenv("BAUD_RATE", "9600"))
+WS_HOST = "0.0.0.0"
+WS_PORT = 8765
+
 
 def open_serial():
     """Open serial port, retrying until success."""
@@ -23,9 +26,11 @@ def open_serial():
             print(f"Serial open failed ({e}), retrying in 3s...")
             time.sleep(3)
 
+
 arduino = open_serial()
 clients = set()
 latest_sensor_data = ""
+
 
 # ---------------------- PARSE SENSOR LINE ----------------------
 def parse_sensor_line(line):
@@ -38,8 +43,7 @@ def parse_sensor_line(line):
         key = key.strip()
         value = value.strip()
 
-        # BUG FIX: "Phosphorous" (Arduino typo) → "Phosphorus (P)" (correct spelling)
-        # All keys normalised here so the rest of the codebase uses clean names.
+        # Normalise Arduino key names to clean display names
         if key == "EC":                     key = "Electrical Conductivity (EC)"
         elif key.lower() == "ph":           key = "pH Level"
         elif key == "Nitrogen":             key = "Nitrogen (N)"
@@ -55,23 +59,21 @@ def parse_sensor_line(line):
         print(f"Error parsing line: {e}")
     return data
 
+
 # ---------------------- HANDLE CLIENT ----------------------
 async def handle_client(websocket):
-    # BUG FIX: removed the "GET_AI_SUGGESTION" / suggest_plants() block entirely.
-    # AI recommendations are now handled exclusively by the FastAPI service
-    # (get_recommendations.py).  The WebSocket server's only job is to stream
-    # live sensor readings to the Flutter app.
     print(f"Client connected: {websocket.remote_address}")
     clients.add(websocket)
     try:
         async for message in websocket:
-            # No client messages require a response from this server anymore.
+            # No client messages require a response from this server.
             pass
     except Exception as e:
         print(f"Client error: {e}")
     finally:
         clients.discard(websocket)
         print(f"Client disconnected: {websocket.remote_address}")
+
 
 # ---------------------- BROADCAST DATA ----------------------
 async def broadcast_sensor_data():
@@ -81,7 +83,6 @@ async def broadcast_sensor_data():
     while True:
         try:
             if arduino.in_waiting:
-                # errors='ignore' prevents UnicodeDecodeError from crashing the server
                 line = arduino.readline().decode('utf-8', errors='ignore').strip()
                 print(f"Raw from Arduino: {line}")
 
@@ -92,7 +93,6 @@ async def broadcast_sensor_data():
                         full_data.update(data)
 
                     # Potassium is always the last key in the Arduino output cycle.
-                    # Wait 5 s to let any trailing bytes clear, then broadcast.
                     if sensor_name.strip() == 'Potassium':
                         await asyncio.sleep(5)
                         if full_data:
@@ -109,7 +109,6 @@ async def broadcast_sensor_data():
                         full_data.clear()
 
         except serial.SerialException as e:
-            # Hardware-level COM port error – close and reconnect without blocking asyncio.
             print(f"Serial error: {e} — reconnecting...")
             full_data.clear()
             try:
@@ -123,14 +122,15 @@ async def broadcast_sensor_data():
         except Exception as e:
             print(f"Broadcast loop error (continuing): {e}")
 
-        # Always yield to asyncio
         await asyncio.sleep(0.1)
+
 
 # ---------------------- MAIN ----------------------
 async def main():
-    print("Starting WebSocket server on ws://0.0.0.0:8765")
-    async with websockets.serve(handle_client, "0.0.0.0", 8765):
+    print(f"Starting WebSocket server on ws://{WS_HOST}:{WS_PORT}")
+    async with websockets.serve(handle_client, WS_HOST, WS_PORT):
         await broadcast_sensor_data()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

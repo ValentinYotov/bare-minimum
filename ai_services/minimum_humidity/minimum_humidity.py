@@ -5,6 +5,7 @@ import chromadb
 import openai
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -137,6 +138,13 @@ def _save_to_file(response: HumidityResponse) -> None:
 # ---------------------------------------------------------------------------
 
 app = FastAPI(title="Minimum Humidity Service")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/minimum-humidity", response_model=HumidityResponse)

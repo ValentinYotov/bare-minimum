@@ -1,6 +1,7 @@
-uvicorn get_recommendations:app --host 0.0.0.0 --port 8090 --reload 
+uvicorn get_recommendations:app --host 0.0.0.0 --port 8002 --reload
 
+# Test with PowerShell:
 Invoke-RestMethod -Method Post `
->> -Uri "http://localhost:8000/recommendations" `
->> -ContentType "application/json" `
->> -Body '{"N": 40, "P": 32, "K": 53, "ph": 6.5, "humidity": 35.0, "electrical_conductivity": 0.5}'
+  -Uri "http://localhost:8002/recommendations" `
+  -ContentType "application/json" `
+  -Body '{"N": 40, "P": 32, "K": 53, "ph": 6.5, "humidity": 35.0, "electrical_conductivity": 0.5}'

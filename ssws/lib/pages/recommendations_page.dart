@@ -8,9 +8,9 @@ import '../models/crop_model.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/top_navbar.dart';
 
-// --- Change these to match your local server addresses ---
+// ----------- FIX: port was 8002, must be 8000 to match FastAPI / curl -----------
 const String _kWsUrl  = 'ws://localhost:8765';
-const String _kApiUrl = 'http://localhost:8002/recommendations';
+const String _kApiUrl = 'http://localhost:8000/recommendations';
 
 class _AiCropResult {
   final String cropName;
@@ -115,6 +115,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         return null;
       }
 
+      
+      print("started parsing");
+      
+
       sub = channel.stream.listen(
         (raw) {
           if (completer.isCompleted) return;
@@ -122,25 +126,30 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             final data = json.decode(raw.toString()) as Map<String, dynamic>;
 
             final n   = _tryParse(data['Nitrogen (N)']);
-            // BUG FIX: key was 'Phosphorous (P)' on some firmware versions.
-            // main.py normalises it to 'Phosphorus (P)' — match that here.
             final p   = _tryParse(data['Phosphorus (P)']);
             final k   = _tryParse(data['Potassium (K)']);
             final ph  = _tryParse(data['pH Level']);
             final hum = _tryParse(data['humidity']);
             final ec  = _tryParse(data['Electrical Conductivity (EC)']);
-
+            // print(data['Nitrogen (N)']);
+            // print(data['Phosphorus (P)']);
+            // print(data['Potassium (K)']);
+            // print(data['pH Level']);
+            // print(data['humidity']);
+            // print(data['Electrical Conductivity (EC)']);
+           
             if (n   != null &&
                 p   != null &&
                 k   != null &&
                 ph  != null &&
                 hum != null &&
                 ec  != null) {
+
               completer.complete(
                 {'N': n, 'P': p, 'K': k, 'ph': ph, 'humidity': hum, 'ec': ec},
               );
+              
             }
-            // If any field is missing / Error 0xE2, keep waiting for the next cycle
           } catch (_) {}
         },
         onError: (_) {
@@ -152,10 +161,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         cancelOnError: false,
       );
 
-      // BUG FIX: increased from 90 s to 120 s.
-      // main.py sleeps 5 s after receiving Potassium (the last key in the cycle)
-      // before broadcasting, so a full cycle can take well over 90 s on a slow
-      // sensor.  120 s gives comfortable headroom.
       return await completer.future.timeout(
         const Duration(seconds: 120),
         onTimeout: () => null,
@@ -170,11 +175,17 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     }
   }
 
-  double? _tryParse(dynamic v) {
-    if (v == null) return null;
-    final s = v.toString();
-    if (s.contains('Error')) return null;
-    return double.tryParse(s);
+   double? _tryParse(dynamic v) {
+      if (v == null) return null;
+      final s = v.toString().trim();
+      print('[TRYPARSE] raw value: "$s"');
+      if (s.contains('Error')) return null;
+      // Extract the first number from the string (handles "42 mg/kg", " 42.5 ", etc.)
+      final match = RegExp(r'-?\d+\.?\d*').firstMatch(s);
+      if (match == null) return null;
+      final result = double.tryParse(match.group(0)!);
+      print('[TRYPARSE] parsed: $result');
+      return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -182,9 +193,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   // ---------------------------------------------------------------------------
   Future<List<_AiCropResult>> _fetchRecommendations(
       Map<String, double> sensor) async {
-    // BUG FIX: the Pydantic model in get_recommendations.py expects the field
-    // named 'electrical_conductivity', not 'ec'.  The map key is 'ec' (internal
-    // shorthand), so we must expand it to the full name here.
+    // The Pydantic model expects 'electrical_conductivity', not 'ec'
     final response = await http
         .post(
           Uri.parse(_kApiUrl),
@@ -195,7 +204,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             'K':                        sensor['K'],
             'ph':                       sensor['ph'],
             'humidity':                 sensor['humidity'],
-            'electrical_conductivity':  sensor['ec'],   // ← correct field name
+            'electrical_conductivity':  sensor['ec'],
           }),
         )
         .timeout(const Duration(seconds: 60));

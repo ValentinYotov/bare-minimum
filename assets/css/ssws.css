@@ -1359,7 +1359,78 @@ a {
   color: var(--ssws-muted);
 }
 
-/* Settings in app */
+/* Settings in app — two cards side by side */
+.ssws-settings-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  max-width: 1120px;
+  margin: 0 auto 2rem;
+}
+
+.ssws-settings-layout .ssws-card {
+  margin: 0;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .ssws-settings-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ssws-settings-account-summary {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--ssws-radius-sm);
+  font-size: 0.9rem;
+}
+
+.ssws-settings-account-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.ssws-settings-account-row:last-child {
+  margin-bottom: 0;
+}
+
+.ssws-settings-account-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ssws-muted);
+}
+
+.ssws-settings-account-value {
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.ssws-settings-subheading {
+  font-family: var(--font);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  color: var(--ssws-green-dark);
+}
+
+.ssws-settings-form input[type="password"] {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--ssws-radius-sm);
+  font-family: var(--font);
+  margin-bottom: 1rem;
+}
+
 .ssws-settings-heading {
   font-family: var(--font);
   font-size: 1.15rem;

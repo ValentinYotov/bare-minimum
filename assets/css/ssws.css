@@ -1421,6 +1421,17 @@ a {
   color: var(--ssws-green-dark);
 }
 
+.ss-map-ai-hint {
+  margin: -0.35rem 0 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ssws-muted);
+}
+
+.ss-map-ai-hint:not([hidden]) {
+  display: block;
+}
+
 .ssws-settings-form input[type="password"] {
   width: 100%;
   max-width: 400px;

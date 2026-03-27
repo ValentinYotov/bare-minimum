@@ -73,6 +73,12 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
                     <label class="ss-map-label" for="zone-display-name">Zone name</label>
                     <input type="text" class="ss-map-text-input" id="zone-display-name" maxlength="128" placeholder="e.g. North orchard" autocomplete="off" />
 
+                    <label class="ss-map-label" for="zone-planted-crop">Crop planted here</label>
+                    <select class="ss-map-text-input" id="zone-planted-crop" aria-describedby="zone-planted-crop-hint">
+                        <option value="">— Not set —</option>
+                    </select>
+                    <p class="ss-map-layout-hint" id="zone-planted-crop-hint">Optional. Used first for auto-setting the humidity threshold; we also try to match your zone name, then fall back to the nearest soil profile in the dataset.</p>
+
                     <p class="ss-map-layout-hint">Map uses a 400×280 grid. Drag zones and sensor dots; corner handles appear on the selected zone. Remove deletes this zone from your account.</p>
 
                     <button type="button" class="ss-map-remove-btn" id="ssws-zone-remove">Remove this zone</button>
@@ -82,6 +88,7 @@ require_once __DIR__ . "/includes/ssws_app_start.php";
                     <label class="ss-map-label" for="zone-humidity">
                         Water when humidity below <span class="ss-map-val" id="zone-humidity-val">30</span>%
                     </label>
+                    <p class="ss-map-ai-hint" id="zone-humidity-ai-hint" hidden></p>
                     <input type="range" class="ss-map-range" id="zone-humidity" min="5" max="90" step="1" value="30" />
                 </div>
 

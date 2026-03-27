@@ -110,6 +110,9 @@ $rule = [
     "marker_x" => array_key_exists("marker_x", $data) && $data["marker_x"] !== null ? (float) $data["marker_x"] : null,
     "marker_y" => array_key_exists("marker_y", $data) && $data["marker_y"] !== null ? (float) $data["marker_y"] : null,
 ];
+if (array_key_exists("planted_crop", $data)) {
+    $rule["planted_crop"] = $data["planted_crop"];
+}
 
 if ($rule["temp_normal_max_c"] >= $rule["temp_warning_max_c"]) {
     http_response_code(400);

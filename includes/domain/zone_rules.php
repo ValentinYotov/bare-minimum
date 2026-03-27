@@ -14,6 +14,7 @@ function ssws_new_zone_rule_template(): array
         "smoke_alert_pct" => 70.0,
         "display_name" => "",
         "subtitle" => "",
+        "planted_crop" => "",
         "svg_x" => 8.0,
         "svg_y" => 8.0,
         "svg_w" => 180.0,
@@ -95,6 +96,12 @@ function ssws_zone_rules_has_sort_order(mysqli $conn): bool
     return $c && $c->num_rows > 0;
 }
 
+function ssws_zone_rules_has_planted_crop(mysqli $conn): bool
+{
+    $c = @$conn->query("SHOW COLUMNS FROM zone_rules LIKE 'planted_crop'");
+    return $c && $c->num_rows > 0;
+}
+
 /** Last mysqli error from ssws_save_zone_rule (for API debugging). */
 function ssws_zone_save_last_error(): string
 {
@@ -117,19 +124,22 @@ function ssws_load_all_zone_rules_ordered(mysqli $conn, string $username): array
     $hasLayout = ssws_zone_rules_has_layout_columns($conn);
     $hasMarker = ssws_zone_rules_has_layout_columns($conn) && ssws_zone_rules_has_marker_columns($conn);
     $hasSort = ssws_zone_rules_has_sort_order($conn);
+    $hasPlantedCrop = ssws_zone_rules_has_planted_crop($conn);
+    $cropSel = $hasPlantedCrop ? ", planted_crop" : "";
 
     $orderSql = $hasSort ? "sort_order ASC, zone_key ASC" : "zone_key ASC";
 
     if ($hasMarker) {
         $sql = "SELECT zone_key, humidity_water_below_pct, temp_normal_max_c, temp_warning_max_c, smoke_alert_pct,
-                       display_name, subtitle, svg_x, svg_y, svg_w, svg_h, marker_x, marker_y
+                       display_name, subtitle" . $cropSel . ", svg_x, svg_y, svg_w, svg_h, marker_x, marker_y
                 FROM zone_rules WHERE username = ? ORDER BY " . $orderSql;
     } elseif ($hasLayout) {
         $sql = "SELECT zone_key, humidity_water_below_pct, temp_normal_max_c, temp_warning_max_c, smoke_alert_pct,
-                       display_name, subtitle, svg_x, svg_y, svg_w, svg_h
+                       display_name, subtitle" . $cropSel . ", svg_x, svg_y, svg_w, svg_h
                 FROM zone_rules WHERE username = ? ORDER BY " . $orderSql;
     } else {
         $sql = "SELECT zone_key, humidity_water_below_pct, temp_normal_max_c, temp_warning_max_c, smoke_alert_pct
+                " . ($hasPlantedCrop ? ", planted_crop" : "") . "
                 FROM zone_rules WHERE username = ? ORDER BY " . $orderSql;
     }
 
@@ -173,6 +183,10 @@ function ssws_load_all_zone_rules_ordered(mysqli $conn, string $username): array
             $base = ssws_clamp_marker_in_zone($base);
         }
 
+        if ($hasPlantedCrop && isset($row["planted_crop"])) {
+            $base["planted_crop"] = trim((string) $row["planted_crop"]);
+        }
+
         $out[$k] = $base;
         $order[] = $k;
     }
@@ -204,6 +218,38 @@ function ssws_next_sort_order(mysqli $conn, string $username): int
     $row = $res->fetch_assoc();
     $stmt->close();
     return (int) ($row["n"] ?? 1);
+}
+
+/**
+ * Persist planted_crop after main INSERT (column added via sql/zone_rules_add_planted_crop.sql).
+ */
+function ssws_zone_rule_persist_planted_crop(mysqli $conn, string $username, string $zoneKey, array $rule): void
+{
+    if (!ssws_zone_rules_has_planted_crop($conn)) {
+        return;
+    }
+    if (!array_key_exists("planted_crop", $rule)) {
+        return;
+    }
+    require_once __DIR__ . "/crop_zone_humidity.php";
+    $raw = trim((string) ($rule["planted_crop"] ?? ""));
+    $pc = ssws_validate_planted_crop_label($raw);
+    if ($pc === "") {
+        $stmt = $conn->prepare("UPDATE zone_rules SET planted_crop = NULL WHERE username = ? AND zone_key = ?");
+        if ($stmt) {
+            $stmt->bind_param("ss", $username, $zoneKey);
+            $stmt->execute();
+            $stmt->close();
+        }
+        return;
+    }
+    $stmt = $conn->prepare("UPDATE zone_rules SET planted_crop = ? WHERE username = ? AND zone_key = ?");
+    if (!$stmt) {
+        return;
+    }
+    $stmt->bind_param("sss", $pc, $username, $zoneKey);
+    $stmt->execute();
+    $stmt->close();
 }
 
 function ssws_save_zone_rule(mysqli $conn, string $username, string $zoneKey, array $rule): bool
@@ -350,6 +396,9 @@ function ssws_save_zone_rule(mysqli $conn, string $username, string $zoneKey, ar
             $GLOBALS["ssws_zone_save_err"] = $stmt->error !== "" ? $stmt->error : $conn->error;
         }
         $stmt->close();
+        if ($ok) {
+            ssws_zone_rule_persist_planted_crop($conn, $username, $zoneKey, $rule);
+        }
         return $ok;
     }
 
@@ -433,6 +482,9 @@ function ssws_save_zone_rule(mysqli $conn, string $username, string $zoneKey, ar
             $GLOBALS["ssws_zone_save_err"] = $stmt->error !== "" ? $stmt->error : $conn->error;
         }
         $stmt->close();
+        if ($ok) {
+            ssws_zone_rule_persist_planted_crop($conn, $username, $zoneKey, $rule);
+        }
         return $ok;
     }
 
@@ -472,6 +524,9 @@ function ssws_save_zone_rule(mysqli $conn, string $username, string $zoneKey, ar
         $GLOBALS["ssws_zone_save_err"] = $stmt->error !== "" ? $stmt->error : $conn->error;
     }
     $stmt->close();
+    if ($ok) {
+        ssws_zone_rule_persist_planted_crop($conn, $username, $zoneKey, $rule);
+    }
     return $ok;
 }
 
